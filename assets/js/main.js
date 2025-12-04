@@ -1,5 +1,5 @@
 // assets/js/main.js
-const apiBase = '/api'; // adjust path
+const apiBase = '/STI-DIMS/sti-discipline-information-management-system/api'; // adjust path
 
 document.addEventListener('DOMContentLoaded', () => {
   
