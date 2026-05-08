@@ -1,0 +1,121 @@
+// src/lib/api.ts
+import axios from 'axios';
+
+const BASE = import.meta.env.VITE_API_BASE ?? '/api';
+
+export const api = axios.create({
+  baseURL: BASE,
+  withCredentials: true,   // send HttpOnly cookies automatically
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// ── CSRF: read csrf_token cookie and attach as header ──────────
+function getCsrfToken(): string {
+  return document.cookie
+    .split('; ')
+    .find(r => r.startsWith('csrf_token='))
+    ?.split('=')[1] ?? '';
+}
+
+api.interceptors.request.use(config => {
+  const method = (config.method ?? '').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    config.headers['X-CSRF-Token'] = getCsrfToken();
+  }
+  return config;
+});
+
+// ── Auto-refresh on 401 ────────────────────────────────────────
+let isRefreshing = false;
+let refreshQueue: Array<(ok: boolean) => void> = [];
+
+api.interceptors.response.use(
+  res => res,
+  async error => {
+    const original = error.config;
+
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+
+      if (isRefreshing) {
+        return new Promise<boolean>(resolve => {
+          refreshQueue.push(resolve);
+        }).then(ok => (ok ? api(original) : Promise.reject(error)));
+      }
+
+      isRefreshing = true;
+      try {
+        await axios.post(`${BASE}/auth/refresh.php`, {}, { withCredentials: true });
+        refreshQueue.forEach(cb => cb(true));
+        refreshQueue = [];
+        return api(original);
+      } catch {
+        refreshQueue.forEach(cb => cb(false));
+        refreshQueue = [];
+        // Redirect to login
+        window.location.href = '/login';
+        return Promise.reject(error);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// ── Typed helpers ──────────────────────────────────────────────
+export const authApi = {
+  login: (username: string, password: string) =>
+    api.post('/auth/login.php', { username, password }),
+  logout: () => api.post('/auth/logout.php'),
+  me: () => api.get('/auth/me.php'),
+};
+
+export const studentsApi = {
+  search: (q: string, page = 1) =>
+    api.get('/students/index.php', { params: { q, page } }),
+  get: (id: number) => api.get('/students/index.php', { params: { id } }),
+};
+
+export const violationsApi = {
+  list: (params?: Record<string, unknown>) =>
+    api.get('/violations/index.php', { params }),
+  get: (id: number) => api.get('/violations/index.php', { params: { id } }),
+  byStudent: (studentId: number) =>
+    api.get('/violations/index.php', { params: { student_id: studentId } }),
+  create: (data: Record<string, unknown>) =>
+    api.post('/violations/index.php', data),
+  patch: (id: number, data: Record<string, unknown>) =>
+    api.patch(`/violations/index.php?id=${id}`, data),
+  delete: (id: number) => api.delete(`/violations/index.php?id=${id}`),
+};
+
+export const violationTypesApi = {
+  list: () => api.get('/violation_types/index.php'),
+};
+
+export const deploymentApi = {
+  list: (params?: Record<string, unknown>) =>
+    api.get('/deployment/index.php', { params }),
+  get: (id: number) => api.get('/deployment/index.php', { params: { id } }),
+  byStudent: (studentId: number) =>
+    api.get('/deployment/index.php', { params: { student_id: studentId } }),
+  create: (data: Record<string, unknown>) =>
+    api.post('/deployment/index.php', data),
+  patch: (id: number, data: Record<string, unknown>) =>
+    api.patch(`/deployment/index.php?id=${id}`, data),
+  logHours: (data: Record<string, unknown>) =>
+    api.put('/deployment/index.php', data),
+};
+
+export const dashboardApi = {
+  stats: () => api.get('/dashboard/index.php'),
+};
+
+export const filesApi = {
+  upload: (formData: FormData) =>
+    api.post('/files/upload.php', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+};

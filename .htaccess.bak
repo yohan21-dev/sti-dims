@@ -1,0 +1,25 @@
+Options -Indexes
+Options -ExecCGI
+
+# Block direct access to sensitive files
+<FilesMatch "\.(env|md|sh|sql|log|json|lock|gitignore)$">
+    Require all denied
+</FilesMatch>
+
+# Block access to config, middleware directories
+<DirectoryMatch "/(config|middleware)/">
+    Require all denied
+</DirectoryMatch>
+
+# Route all API requests through index or named files
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ api/$1/index.php [L,QSA]
+
+# Security headers (supplement PHP-set headers)
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+Header always set Content-Security-Policy "default-src 'self'; script-src 'none'"

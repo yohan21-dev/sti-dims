@@ -1,0 +1,33 @@
+Options -Indexes
+Options -ExecCGI
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /sti-dims/
+
+  # Do not rewrite existing files or folders
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Do not rewrite API requests
+  RewriteRule ^api/ - [L]
+
+  # Do not rewrite PHP files
+  RewriteRule ^.*\.php$ - [L]
+
+  # React SPA fallback
+  RewriteRule ^ backend/public/index.html [L]
+</IfModule>
+
+# Block direct access to sensitive files
+<FilesMatch "\.(env|md|sh|sql|log|json|lock|gitignore)$">
+  Require all denied
+</FilesMatch>
+
+# Security headers
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set X-XSS-Protection "1; mode=block"
+</IfModule>
