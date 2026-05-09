@@ -4,8 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Users, AlertTriangle,
-  Briefcase, LogOut, X, ChevronRight,
-  ShieldCheck,
+  Briefcase, LogOut, X, ChevronRight
 } from 'lucide-react';
 
 const NAV = [
@@ -38,12 +37,21 @@ export default function Sidebar({ isOpen, onClose }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-5 border-b border-navy-800">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gold-500 flex items-center justify-center shadow-glow-gold">
-            <ShieldCheck size={18} className="text-navy-950" />
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-white/5">
+            <img
+              src="/assets/images/sti-logo.png"
+              alt="STI Logo"
+              className="w-10 h-auto object-contain"
+            />
           </div>
+
           <div>
-            <p className="font-display font-bold text-white text-sm leading-tight">STI DIMS</p>
-            <p className="text-xs text-slate-500 leading-tight">Discipline System</p>
+            <p className="font-display font-bold text-white text-sm leading-tight">
+              STI DIMS
+            </p>
+            <p className="text-xs text-slate-500 leading-tight">
+              Discipline Information Management System
+            </p>
           </div>
         </div>
         <button

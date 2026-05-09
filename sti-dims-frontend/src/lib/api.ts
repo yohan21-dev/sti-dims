@@ -34,7 +34,16 @@ api.interceptors.response.use(
   async error => {
     const original = error.config;
 
-    if (error.response?.status === 401 && !original._retry) {
+    const isAuthCheck = original.url?.includes('/auth/me.php');
+    const isRefreshRequest = original.url?.includes('/auth/refresh.php');
+    const isLoginPage = window.location.pathname.includes('/login');
+
+    if (
+      error.response?.status === 401 &&
+      !original._retry &&
+      !isAuthCheck &&
+      !isRefreshRequest
+    ) {
       original._retry = true;
 
       if (isRefreshing) {
@@ -53,7 +62,9 @@ api.interceptors.response.use(
         refreshQueue.forEach(cb => cb(false));
         refreshQueue = [];
         // Redirect to login
-        window.location.href = '/login';
+        if (!isLoginPage) {
+          window.location.href = '/login';
+        }
         return Promise.reject(error);
       } finally {
         isRefreshing = false;

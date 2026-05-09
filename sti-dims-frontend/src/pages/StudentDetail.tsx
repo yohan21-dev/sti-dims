@@ -18,6 +18,7 @@ const SEVERITY_BADGE: Record<string, string> = {
   major: 'badge-major',
   critical: 'badge-critical',
 };
+
 const STATUS_BADGE: Record<string, string> = {
   pending: 'badge-pending',
   in_progress: 'badge-in_progress',
@@ -25,6 +26,7 @@ const STATUS_BADGE: Record<string, string> = {
   appealed: 'badge-appealed',
   dismissed: 'badge-dismissed',
 };
+
 const STATUS_ICON: Record<string, React.ReactNode> = {
   pending: <Clock size={12} />,
   in_progress: <AlertTriangle size={12} />,
@@ -65,16 +67,23 @@ export default function StudentDetailPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Link to="/students" className="p-1.5 rounded-lg hover:bg-navy-800 text-slate-400 transition-colors">
+          <Link
+            to="/students"
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+          >
             <ArrowLeft size={18} />
           </Link>
+
           <div>
-            <h1 className="font-display text-xl font-bold text-white">
+            <h1 className="font-display text-xl font-bold text-slate-900">
               {student ? `${student.last_name}, ${student.first_name}` : 'Student'}
             </h1>
-            <p className="text-slate-400 text-sm">{student?.student_number} · {student?.program} · {student?.section}</p>
+            <p className="text-slate-500 text-sm">
+              {student?.student_number} · {student?.program} · {student?.section}
+            </p>
           </div>
         </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowUploadModal(true)}
@@ -82,6 +91,7 @@ export default function StudentDetailPage() {
           >
             <Upload size={14} /> Upload File
           </button>
+
           <button
             onClick={() => setShowViolModal(true)}
             className="btn-primary flex items-center gap-1.5 text-sm py-1.5"
@@ -95,13 +105,29 @@ export default function StudentDetailPage() {
       {student?.violation_stats && (
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Violations', value: student.violation_stats.total, color: 'text-gold-400' },
-            { label: 'Pending', value: student.violation_stats.pending, color: 'text-yellow-400' },
-            { label: 'Resolved', value: student.violation_stats.resolved, color: 'text-green-400' },
+            {
+              label: 'Total Violations',
+              value: student.violation_stats.total,
+              color: 'text-amber-600',
+            },
+            {
+              label: 'Pending',
+              value: student.violation_stats.pending,
+              color: 'text-yellow-600',
+            },
+            {
+              label: 'Resolved',
+              value: student.violation_stats.resolved,
+              color: 'text-green-600',
+            },
           ].map(s => (
             <div key={s.label} className="card text-center py-3">
-              <p className={`font-display text-2xl font-bold ${s.color}`}>{s.value}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
+              <p className={`font-display text-2xl font-bold ${s.color}`}>
+                {s.value}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {s.label}
+              </p>
             </div>
           ))}
         </div>
@@ -110,9 +136,11 @@ export default function StudentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Violations timeline */}
         <div className="lg:col-span-2 card">
-          <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-            <AlertTriangle size={15} className="text-gold-400" /> Violation History
+          <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <AlertTriangle size={15} className="text-amber-600" />
+            Violation History
           </h2>
+
           {loadingViol ? (
             <p className="text-slate-500 text-sm">Loading…</p>
           ) : violations.length === 0 ? (
@@ -120,31 +148,55 @@ export default function StudentDetailPage() {
           ) : (
             <div className="space-y-3">
               {violations.map(v => (
-                <div key={v.id} className="p-3 rounded-xl bg-navy-850 border border-navy-700/40 hover:border-gold-500/20 transition-colors">
+                <div
+                  key={v.id}
+                  className="p-3 rounded-xl bg-white border border-slate-200 hover:border-amber-300 hover:shadow-sm transition-colors"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-white text-sm">{v.violation_name}</p>
-                      <p className="text-slate-400 text-xs mt-0.5">
+                      <p className="font-semibold text-slate-900 text-sm">
+                        {v.violation_name}
+                      </p>
+
+                      <p className="text-slate-500 text-xs mt-0.5">
                         {format(new Date(v.date_recorded), 'MMM d, yyyy')} · by {v.officer_name}
-                        {v.offense_count > 1 && <span className="ml-2 text-orange-400 font-medium">{v.offense_count === 2 ? '2nd' : '3rd+'} offense</span>}
+                        {v.offense_count > 1 && (
+                          <span className="ml-2 text-orange-600 font-medium">
+                            {v.offense_count === 2 ? '2nd' : '3rd+'} offense
+                          </span>
+                        )}
                       </p>
                     </div>
+
                     <div className="flex items-center gap-1.5">
-                      <span className={`badge ${SEVERITY_BADGE[v.severity] ?? ''}`}>{v.severity}</span>
+                      <span className={`badge ${SEVERITY_BADGE[v.severity] ?? ''}`}>
+                        {v.severity}
+                      </span>
+
                       <span className={`badge ${STATUS_BADGE[v.status] ?? ''} flex items-center gap-1`}>
-                        {STATUS_ICON[v.status]}{v.status.replace('_', ' ')}
+                        {STATUS_ICON[v.status]}
+                        {v.status.replace('_', ' ')}
                       </span>
                     </div>
                   </div>
+
                   {v.officer_notes && (
-                    <p className="text-xs text-slate-500 mt-2 italic">"{v.officer_notes}"</p>
+                    <p className="text-xs text-slate-500 mt-2 italic">
+                      "{v.officer_notes}"
+                    </p>
                   )}
+
                   {v.department && (
-                    <div className="mt-2 pt-2 border-t border-navy-700/40 text-xs text-slate-400 flex items-center gap-1.5">
+                    <div className="mt-2 pt-2 border-t border-slate-200 text-xs text-slate-500 flex items-center gap-1.5">
                       <Briefcase size={11} />
-                      <span>Deployed: {v.department} · {v.hours_completed ?? 0}/{v.hours_required ?? 0} hrs</span>
+                      <span>
+                        Deployed: {v.department} · {v.hours_completed ?? 0}/{v.hours_required ?? 0} hrs
+                      </span>
+
                       {v.deploy_status && (
-                        <span className={`badge ${STATUS_BADGE[v.deploy_status] ?? ''} ml-auto`}>{v.deploy_status}</span>
+                        <span className={`badge ${STATUS_BADGE[v.deploy_status] ?? ''} ml-auto`}>
+                          {v.deploy_status}
+                        </span>
                       )}
                     </div>
                   )}
@@ -156,19 +208,29 @@ export default function StudentDetailPage() {
 
         {/* Files */}
         <div className="card">
-          <h2 className="font-semibold text-white mb-4 flex items-center gap-2">
-            <FileText size={15} className="text-gold-400" /> Documents
+          <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <FileText size={15} className="text-amber-600" />
+            Documents
           </h2>
-          {(!student?.files || student.files.length === 0) ? (
+
+          {!student?.files || student.files.length === 0 ? (
             <p className="text-slate-500 text-sm">No files uploaded yet.</p>
           ) : (
             <div className="space-y-2">
               {student.files.map(f => (
-                <div key={f.id} className="flex items-center gap-2 p-2 rounded-lg bg-navy-850 border border-navy-700/40 text-sm">
-                  <FileText size={14} className="text-slate-400 shrink-0" />
+                <div
+                  key={f.id}
+                  className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-200 text-sm"
+                >
+                  <FileText size={14} className="text-slate-500 shrink-0" />
+
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-slate-300">{f.original_name}</p>
-                    <p className="text-xs text-slate-600">{f.category.replace('_', ' ')}</p>
+                    <p className="truncate text-slate-700">
+                      {f.original_name}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {f.category.replace('_', ' ')}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -183,9 +245,13 @@ export default function StudentDetailPage() {
           studentId={student.id}
           studentName={`${student.last_name}, ${student.first_name}`}
           onClose={() => setShowViolModal(false)}
-          onSuccess={() => { setShowViolModal(false); refetchViol(); }}
+          onSuccess={() => {
+            setShowViolModal(false);
+            refetchViol();
+          }}
         />
       )}
+
       {showUploadModal && student && (
         <UploadFileModal
           studentId={student.id}

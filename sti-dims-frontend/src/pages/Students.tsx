@@ -33,13 +33,20 @@ export default function StudentsPage() {
   return (
     <div className="space-y-5 animate-fade-in">
       <div>
-        <h1 className="font-display text-2xl font-bold text-white">Students</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Search and view student records from STI Cubao</p>
+        <h1 className="font-display text-2xl font-bold text-slate-900">
+          Students
+        </h1>
+        <p className="text-slate-500 text-sm mt-0.5">
+          Search and view student records from STI Cubao
+        </p>
       </div>
 
       {/* Search */}
       <div className="relative">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+        <Search
+          size={16}
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+        />
         <input
           value={q}
           onChange={e => {
@@ -54,10 +61,13 @@ export default function StudentsPage() {
       {/* Table */}
       <div className="card overflow-hidden p-0">
         {isLoading ? (
-          <div className="p-8 text-center text-slate-500 text-sm">Searching…</div>
+          <div className="p-8 text-center text-slate-500 text-sm">
+            Searching…
+          </div>
         ) : isError ? (
-          <div className="p-8 text-center text-red-400 text-sm flex items-center justify-center gap-2">
-            <AlertCircle size={16} /> Failed to load students
+          <div className="p-8 text-center text-red-600 text-sm flex items-center justify-center gap-2">
+            <AlertCircle size={16} />
+            Failed to load students
           </div>
         ) : students.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-sm">
@@ -75,27 +85,43 @@ export default function StudentsPage() {
                   <th />
                 </tr>
               </thead>
+
               <tbody>
                 {students.map(s => (
                   <tr key={s.id}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-navy-700 border border-navy-600 flex items-center justify-center shrink-0">
-                          <User size={13} className="text-slate-400" />
+                        <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                          <User size={13} className="text-slate-500" />
                         </div>
+
                         <div>
-                          <p className="font-medium text-white text-sm">{s.last_name}, {s.first_name}</p>
-                          <p className="text-xs text-slate-500 sm:hidden">{s.student_number}</p>
+                          <p className="font-medium text-slate-900 text-sm">
+                            {s.last_name}, {s.first_name}
+                          </p>
+                          <p className="text-xs text-slate-500 sm:hidden">
+                            {s.student_number}
+                          </p>
                         </div>
                       </div>
                     </td>
-                    <td className="hidden sm:table-cell font-mono text-slate-400 text-sm">{s.student_number}</td>
-                    <td className="hidden md:table-cell text-slate-300 text-sm">{s.program}</td>
-                    <td className="hidden lg:table-cell text-slate-400 text-sm">{s.section}</td>
+
+                    <td className="hidden sm:table-cell font-mono text-slate-600 text-sm">
+                      {s.student_number}
+                    </td>
+
+                    <td className="hidden md:table-cell text-slate-700 text-sm">
+                      {s.program}
+                    </td>
+
+                    <td className="hidden lg:table-cell text-slate-600 text-sm">
+                      {s.section}
+                    </td>
+
                     <td className="text-right">
                       <Link
                         to={`/students/${s.id}`}
-                        className="inline-flex items-center gap-1 text-gold-400 hover:text-gold-300 text-sm font-medium transition-colors"
+                        className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700 text-sm font-medium transition-colors"
                       >
                         View <ChevronRight size={14} />
                       </Link>
@@ -107,10 +133,11 @@ export default function StudentsPage() {
 
             {/* Pagination */}
             {meta && meta.pages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-navy-800">
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
                 <p className="text-xs text-slate-500">
                   {meta.total} students · Page {meta.page} of {meta.pages}
                 </p>
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -119,6 +146,7 @@ export default function StudentsPage() {
                   >
                     Prev
                   </button>
+
                   <button
                     onClick={() => setPage(p => Math.min(meta.pages, p + 1))}
                     disabled={meta.page >= meta.pages}

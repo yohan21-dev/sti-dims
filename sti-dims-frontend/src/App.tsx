@@ -11,17 +11,20 @@ import DeploymentsPage from '@/pages/Deployments';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-navy-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-gold-500/30 border-t-gold-500 rounded-full animate-spin" />
-          <p className="text-slate-400 text-sm">Loading…</p>
+          <p className="text-slate-500 text-sm">Loading…</p>
         </div>
       </div>
     );
   }
+
   if (!user) return <Navigate to="/login" replace />;
+
   return <>{children}</>;
 }
 

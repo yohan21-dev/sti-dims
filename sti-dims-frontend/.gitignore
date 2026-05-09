@@ -65,3 +65,8 @@ dist/
 .env
 .env.local
 *.log
+
+# Frontend build output inside PHP public folder
+/backend/public/assets/
+/backend/public/index.html
+/backend/public/vite.svg

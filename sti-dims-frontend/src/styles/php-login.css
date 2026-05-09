@@ -1,0 +1,266 @@
+.php-login-page,
+.php-login-page * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Inter", sans-serif;
+}
+
+.php-login-page {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background: white;
+}
+
+/* Left side */
+.php-login-page .left-panel {
+    flex: 1;
+    min-width: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #0b5793;
+}
+
+.php-login-page .header-logo {
+    flex: none;
+    padding: 20px 36px;
+    border-top: 8px solid #f4d03f;
+    background: linear-gradient(135deg, #1565c0 0%, #0b5793 100%);
+}
+
+.php-login-page .header-logo h1 {
+    color: white;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.php-login-page .header-logo span {
+    color: #ffc107;
+}
+
+.php-login-page .background-image {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.php-login-page .login-bimg {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Right side */
+.php-login-page .right-panel {
+    width: 480px;
+    height: 100vh;
+    flex: none;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 40px;
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.08);
+    overflow-y: auto;
+}
+
+.php-login-page .login-container {
+    width: 100%;
+    max-width: 380px;
+}
+
+.php-login-page .sti-logo {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.php-login-page .sti-logo-box {
+    display: inline-block;
+    padding: 8px 25px;
+    border-radius: 8px;
+}
+
+.php-login-page .sti-logo-img {
+    width: 85px;
+    height: auto;
+}
+
+.php-login-page .login-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.php-login-page .error {
+    background: #ffebee;
+    border: 1px solid #ef5350;
+    padding: 10px;
+    margin-bottom: 14px;
+    border-radius: 6px;
+    color: #c62828;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* Form */
+.php-login-page .input-group {
+    margin-bottom: 14px;
+}
+
+.php-login-page .input-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #444;
+    margin-bottom: 6px;
+}
+
+.php-login-page .input-group input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+    transition: border-color 0.2s;
+    background: white;
+    color: #1a1a1a;
+}
+
+.php-login-page .input-group input:focus {
+    border-color: #1565c0;
+    outline: none;
+}
+
+.php-login-page .login-btn {
+    width: 100%;
+    padding: 12px;
+    background: #1565c0;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+    margin-top: 6px;
+}
+
+.php-login-page .login-btn:hover {
+    background: #0d47a1;
+}
+
+.php-login-page .login-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Bottom text */
+.php-login-page .help-link {
+    text-align: center;
+    margin-top: 14px;
+    margin-bottom: 16px;
+}
+
+.php-login-page .help-link a {
+    color: #e53935;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.php-login-page .help-link a:hover {
+    text-decoration: underline;
+}
+
+.php-login-page .info-box {
+    background: #fff8e1;
+    border-left: 4px solid #ffc107;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+}
+
+.php-login-page .info-box p {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.php-login-page .footer-text {
+    text-align: center;
+    color: #999;
+    font-size: 12px;
+    margin-top: 16px;
+}
+
+/* Small height screens */
+@media (max-height: 720px) {
+    .php-login-page .right-panel {
+        align-items: flex-start;
+        padding-top: 18px;
+        padding-bottom: 18px;
+    }
+
+    .php-login-page .sti-logo-img {
+        width: 75px;
+    }
+
+    .php-login-page .login-title {
+        font-size: 24px;
+        margin-bottom: 18px;
+    }
+
+    .php-login-page .info-box {
+        margin-bottom: 10px;
+    }
+
+    .php-login-page .footer-text {
+        margin-top: 10px;
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .php-login-page {
+        height: auto;
+        min-height: 100vh;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .php-login-page .left-panel {
+        height: 180px;
+        flex: none;
+    }
+
+    .php-login-page .right-panel {
+        width: 100%;
+        height: auto;
+        min-height: calc(100vh - 180px);
+        flex: none;
+        box-shadow: none;
+        padding: 24px;
+        overflow: visible;
+    }
+
+    .php-login-page .header-logo {
+        padding: 12px 18px;
+        border-top-width: 6px;
+    }
+
+    .php-login-page .header-logo h1 {
+        font-size: 22px;
+    }
+
+    .php-login-page .login-title {
+        font-size: 24px;
+        margin-bottom: 20px;
+    }
+}
