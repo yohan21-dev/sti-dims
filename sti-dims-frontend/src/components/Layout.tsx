@@ -9,36 +9,34 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar overlay (mobile) */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
+          className="fixed inset-0 bg-sti-blue/30 backdrop-blur-sm z-20 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile top bar */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-slate-200 bg-white">
+        {/* Mobile topbar */}
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-sti-blue border-b border-sti-blue-dark shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600"
+            className="p-2 rounded-lg hover:bg-white/10 text-white transition-colors"
           >
             <Menu size={20} />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-gold-500 flex items-center justify-center">
-              <span className="text-navy-950 font-bold text-xs font-display">S</span>
+          <div className="flex items-center gap-2.5">
+            <img src="/assets/images/sti-logo.png" alt="STI" className="h-8 w-auto rounded" />
+            <div>
+              <p className="font-display font-bold text-white text-sm leading-tight">STI DIMS</p>
+              <p className="text-white/60 text-xs leading-tight">Cubao</p>
             </div>
-            <span className="font-display font-semibold text-slate-900 text-sm">STI DIMS</span>
           </div>
         </div>
 
-        {/* Page content */}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
             <Outlet />

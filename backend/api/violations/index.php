@@ -1,13 +1,36 @@
 <?php
-
+// backend/api/violations/index.php
 require_once __DIR__ . '/../../middleware/AuthMiddleware.php';
 $authUser = requireAuth();
 
 $method = $_SERVER['REQUEST_METHOD'];
 $pdo    = Database::dims();
 
-// ── GET ──────────────────────────────────────────────────────
+// Helper: attach student names from sti_cubao for an array of rows
+function attachStudentNames(array $rows): array {
+    if (empty($rows)) return $rows;
+    $ids = array_unique(array_column($rows, 'student_id'));
+    if (empty($ids)) return $rows;
+
+    $in    = implode(',', array_fill(0, count($ids), '?'));
+    $cStmt = Database::cubao()->prepare(
+        "SELECT id, last_name, first_name FROM students WHERE id IN ($in)"
+    );
+    $cStmt->execute($ids);
+    $map = [];
+    foreach ($cStmt->fetchAll() as $s) {
+        $map[$s['id']] = $s['last_name'] . ', ' . $s['first_name'];
+    }
+    foreach ($rows as &$row) {
+        $row['student_name'] = $map[$row['student_id']] ?? 'Unknown Student';
+    }
+    return $rows;
+}
+
+// ── GET ──────────────────────────────────────────────────────────────
 if ($method === 'GET') {
+
+    // Single violation by ID
     if (!empty($_GET['id'])) {
         $stmt = $pdo->prepare(
             "SELECT v.*, vt.violation_name, vt.severity,
@@ -16,7 +39,7 @@ if ($method === 'GET') {
                     d.hours_completed, d.status AS deploy_status, d.date_assigned
              FROM violations v
              JOIN violation_types vt ON vt.id = v.violation_type_id
-             JOIN users u ON u.id = v.reported_by
+             JOIN users u            ON u.id  = v.reported_by
              LEFT JOIN deployments d ON d.violation_id = v.id
              WHERE v.id = ?"
         );
@@ -24,10 +47,16 @@ if ($method === 'GET') {
         $v = $stmt->fetch();
         if (!$v) fail('Violation not found', 404);
 
-        // Files
-        $fstmt = $pdo->prepare("SELECT * FROM student_files WHERE violation_id = ?");
-        $fstmt->execute([$v['id']]);
-        $v['files'] = $fstmt->fetchAll();
+        // Student name
+        $sStmt = Database::cubao()->prepare("SELECT last_name, first_name FROM students WHERE id = ?");
+        $sStmt->execute([$v['student_id']]);
+        $s = $sStmt->fetch();
+        $v['student_name'] = $s ? $s['last_name'] . ', ' . $s['first_name'] : 'Unknown Student';
+
+        // Files attached to this violation
+        $fStmt = $pdo->prepare("SELECT * FROM student_files WHERE violation_id = ?");
+        $fStmt->execute([$v['id']]);
+        $v['files'] = $fStmt->fetchAll();
 
         respond(['success' => true, 'data' => $v]);
     }
@@ -35,74 +64,100 @@ if ($method === 'GET') {
     // List by student
     if (!empty($_GET['student_id'])) {
         $stmt = $pdo->prepare(
-            "SELECT v.id, v.date_recorded, v.status, v.offense_count,
+            "SELECT v.id, v.student_id, v.date_recorded, v.status, v.offense_count,
+                    v.officer_notes,
                     vt.violation_name, vt.severity,
                     u.full_name AS officer_name,
                     d.hours_required, d.hours_completed, d.department, d.status AS deploy_status
              FROM violations v
              JOIN violation_types vt ON vt.id = v.violation_type_id
-             JOIN users u ON u.id = v.reported_by
+             JOIN users u            ON u.id  = v.reported_by
              LEFT JOIN deployments d ON d.violation_id = v.id
              WHERE v.student_id = ?
              ORDER BY v.date_recorded DESC"
         );
         $stmt->execute([(int)$_GET['student_id']]);
-        respond(['success' => true, 'data' => $stmt->fetchAll()]);
+        $rows = $stmt->fetchAll();
+        respond(['success' => true, 'data' => attachStudentNames($rows)]);
     }
 
-    // Search by student name/number
+    // Filter by status
+    if (!empty($_GET['status'])) {
+        $allowed = ['pending','in_progress','resolved','appealed','dismissed'];
+        $status  = in_array($_GET['status'], $allowed, true) ? $_GET['status'] : 'pending';
+        $limit   = min(100, (int)($_GET['limit'] ?? 50));
+        $stmt    = $pdo->prepare(
+            "SELECT v.id, v.student_id, v.date_recorded, v.status, v.offense_count,
+                    vt.violation_name, vt.severity, u.full_name AS officer_name
+             FROM violations v
+             JOIN violation_types vt ON vt.id = v.violation_type_id
+             JOIN users u            ON u.id  = v.reported_by
+             WHERE v.status = ?
+             ORDER BY v.created_at DESC LIMIT ?"
+        );
+        $stmt->execute([$status, $limit]);
+        $rows = $stmt->fetchAll();
+        respond(['success' => true, 'data' => attachStudentNames($rows)]);
+    }
+
+    // Search by student name / number
     if (!empty($_GET['q'])) {
-        $like = '%' . $_GET['q'] . '%';
-        $cdb  = Database::cubao();
-        $sStmt = $cdb->prepare(
+        $like  = '%' . $_GET['q'] . '%';
+        $cDb   = Database::cubao();
+        $sStmt = $cDb->prepare(
             "SELECT id FROM students WHERE last_name LIKE ? OR first_name LIKE ? OR student_number LIKE ?"
         );
         $sStmt->execute([$like, $like, $like]);
         $ids = array_column($sStmt->fetchAll(), 'id');
-        if (empty($ids)) { respond(['success' => true, 'data' => []]); }
-
+        if (empty($ids)) {
+            respond(['success' => true, 'data' => []]);
+        }
         $in   = implode(',', array_fill(0, count($ids), '?'));
         $stmt = $pdo->prepare(
-            "SELECT v.id, v.student_id, v.date_recorded, v.status, vt.violation_name, vt.severity
+            "SELECT v.id, v.student_id, v.date_recorded, v.status, v.offense_count,
+                    vt.violation_name, vt.severity, u.full_name AS officer_name
              FROM violations v
              JOIN violation_types vt ON vt.id = v.violation_type_id
+             JOIN users u            ON u.id  = v.reported_by
              WHERE v.student_id IN ($in)
              ORDER BY v.date_recorded DESC LIMIT 100"
         );
         $stmt->execute($ids);
-        respond(['success' => true, 'data' => $stmt->fetchAll()]);
+        $rows = $stmt->fetchAll();
+        respond(['success' => true, 'data' => attachStudentNames($rows)]);
     }
 
-    // Recent list
-    $limit = min(50, (int)($_GET['limit'] ?? 20));
+    // Recent list (default)
+    $limit = min(100, (int)($_GET['limit'] ?? 50));
     $stmt  = $pdo->prepare(
         "SELECT v.id, v.student_id, v.date_recorded, v.status, v.offense_count,
                 vt.violation_name, vt.severity, u.full_name AS officer_name
          FROM violations v
          JOIN violation_types vt ON vt.id = v.violation_type_id
-         JOIN users u ON u.id = v.reported_by
+         JOIN users u            ON u.id  = v.reported_by
          ORDER BY v.created_at DESC LIMIT ?"
     );
     $stmt->execute([$limit]);
-    respond(['success' => true, 'data' => $stmt->fetchAll()]);
+    $rows = $stmt->fetchAll();
+    respond(['success' => true, 'data' => attachStudentNames($rows)]);
 }
 
-// ── POST ─────────────────────────────────────────────────────
+// ── POST (record new violation) ───────────────────────────────────────
 if ($method === 'POST') {
-    $d = body();
+    $d        = body();
     $required = ['student_id', 'violation_type_id', 'date_recorded'];
     foreach ($required as $f) {
         if (empty($d[$f])) fail("$f is required");
     }
 
-    // Determine offense count for this student
+    // Auto-calculate offense count for this student
     $ocStmt = $pdo->prepare("SELECT COUNT(*) FROM violations WHERE student_id = ?");
-    $ocStmt->execute([$d['student_id']]);
+    $ocStmt->execute([(int)$d['student_id']]);
     $offenseCount = (int)$ocStmt->fetchColumn() + 1;
 
     $stmt = $pdo->prepare(
-        "INSERT INTO violations (student_id, violation_type_id, date_recorded, reported_by,
-                                  officer_notes, status, offense_count)
+        "INSERT INTO violations
+            (student_id, violation_type_id, date_recorded, reported_by, officer_notes, status, offense_count)
          VALUES (?, ?, ?, ?, ?, 'pending', ?)"
     );
     $stmt->execute([
@@ -115,7 +170,7 @@ if ($method === 'POST') {
     ]);
     $violationId = (int)$pdo->lastInsertId();
 
-    // Auto-create deployment if requested
+    // Optionally auto-create a deployment
     if (!empty($d['deploy'])) {
         $dp = $d['deploy'];
         $pdo->prepare(
@@ -123,10 +178,10 @@ if ($method === 'POST') {
              VALUES (?, ?, ?, ?, ?)"
         )->execute([
             $violationId,
-            $dp['department'] ?? 'TBD',
+            $dp['department']      ?? 'TBD',
             $dp['supervisor_name'] ?? null,
             (float)($dp['hours_required'] ?? 0),
-            $dp['date_assigned'] ?? date('Y-m-d'),
+            $dp['date_assigned']   ?? date('Y-m-d'),
         ]);
     }
 
@@ -134,7 +189,7 @@ if ($method === 'POST') {
     respond(['success' => true, 'id' => $violationId], 201);
 }
 
-// ── PATCH (status update) ─────────────────────────────────────
+// ── PATCH (update status / notes) ────────────────────────────────────
 if ($method === 'PATCH') {
     $d  = body();
     $id = (int)($_GET['id'] ?? $d['id'] ?? 0);
@@ -144,11 +199,10 @@ if ($method === 'PATCH') {
     $status  = $d['status'] ?? null;
     if ($status && !in_array($status, $allowed, true)) fail('Invalid status');
 
-    $fields = [];
-    $vals   = [];
-    if ($status) { $fields[] = 'status = ?'; $vals[] = $status; }
+    $fields = []; $vals = [];
+    if ($status)              { $fields[] = 'status = ?';        $vals[] = $status; }
     if (isset($d['officer_notes'])) { $fields[] = 'officer_notes = ?'; $vals[] = $d['officer_notes']; }
-    if (empty($fields)) fail('Nothing to update');
+    if (empty($fields))       fail('Nothing to update');
 
     $vals[] = $id;
     $pdo->prepare("UPDATE violations SET " . implode(', ', $fields) . " WHERE id = ?")->execute($vals);
@@ -156,7 +210,7 @@ if ($method === 'PATCH') {
     respond(['success' => true]);
 }
 
-// ── DELETE ────────────────────────────────────────────────────
+// ── DELETE (admin only) ───────────────────────────────────────────────
 if ($method === 'DELETE') {
     requireRole($authUser, 'admin');
     $id = (int)($_GET['id'] ?? 0);
