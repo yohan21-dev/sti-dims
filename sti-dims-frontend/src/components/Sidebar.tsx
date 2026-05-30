@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Users, AlertTriangle,
-  Briefcase, LogOut, X,
+  Briefcase, LogOut, X, Settings
 } from 'lucide-react';
 
 const NAV = [
@@ -84,6 +84,29 @@ export default function Sidebar({ isOpen, onClose }: Props) {
             )}
           </NavLink>
         ))}
+        {user?.role === 'admin' && (
+          <>
+            <div className="mx-3 my-2 border-t border-white/10" />
+            <NavLink
+              to="/admin"
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                ${isActive
+                  ? 'bg-sti-yellow text-sti-blue shadow-sm'
+                  : 'text-white/70 hover:text-white hover:bg-white/10'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Settings size={17} className={isActive ? 'text-sti-blue' : 'opacity-70'} />
+                  <span>Admin Panel</span>
+                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sti-blue" />}
+                </>
+              )}
+            </NavLink>
+          </>
+        )}
       </nav>
 
       {/* ── User footer ── */}

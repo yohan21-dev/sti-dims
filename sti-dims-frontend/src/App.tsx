@@ -8,6 +8,11 @@ import StudentsPage from '@/pages/Students';
 import StudentDetailPage from '@/pages/StudentDetail';
 import ViolationsPage from '@/pages/Violations';
 import DeploymentsPage from '@/pages/Deployments';
+import AdminLayout          from '@/pages/admin/Admin';
+import AdminViolationTypes  from '@/pages/admin/AdminViolationTypes';
+import AdminUsers           from '@/pages/admin/AdminUsers';
+import AdminAuditLog        from '@/pages/admin/AdminAuditLog';
+import RegisterPage         from '@/pages/Register';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -45,6 +50,25 @@ function AppRoutes() {
         <Route path="violations" element={<ViolationsPage />} />
         <Route path="deployments" element={<DeploymentsPage />} />
       </Route>
+
+      <Route path="/register" element={<RegisterPage />} />
+ 
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        <Route element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/violation-types" replace />} />
+          <Route path="violation-types" element={<AdminViolationTypes />} />
+          <Route path="users"           element={<AdminUsers />} />
+          <Route path="audit-log"       element={<AdminAuditLog />} />
+        </Route>
+      </Route>
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
