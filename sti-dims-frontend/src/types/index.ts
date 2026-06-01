@@ -1,6 +1,4 @@
-// src/types/index.ts
-
-export type UserRole = 'admin' | 'officer' | 'viewer';
+export type UserRole = 'admin' | 'officer' | 'viewer' | 'dept_head';
 export type ViolationStatus = 'pending' | 'in_progress' | 'resolved' | 'appealed' | 'dismissed';
 export type Severity = 'minor' | 'moderate' | 'major' | 'critical';
 export type DeployStatus = 'pending' | 'ongoing' | 'completed' | 'cancelled';
@@ -14,6 +12,17 @@ export interface User {
   role: UserRole;
   avatar_url?: string;
   last_login_at?: string;
+}
+
+export interface Department {
+  id: number;
+  name: string;
+  code: string;
+  description?: string;
+  location?: string;
+  head_user_id?: number | null;
+  head_name?: string | null;
+  is_active: 0 | 1;
 }
 
 export interface Student {
@@ -52,9 +61,10 @@ export interface Violation {
   status: ViolationStatus;
   offense_count: number;
   created_at: string;
-  // deployment join
   deployment_id?: number;
   department?: string;
+  department_id?: number;
+  department_name?: string;
   hours_required?: number;
   hours_completed?: number;
   deploy_status?: DeployStatus;
@@ -67,7 +77,14 @@ export interface Deployment {
   violation_id: number;
   violation_name?: string;
   student_id?: number;
+  student_name?: string;
+  student_number?: string;
+  student_program?: string;
+  student_section?: string;
   department: string;
+  department_id?: number;
+  department_name?: string;
+  department_code?: string;
   supervisor_name?: string;
   hours_required: number;
   hours_completed: number;

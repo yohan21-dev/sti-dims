@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { violationsApi, violationTypesApi, studentsApi } from '@/lib/api';
+import { violationsApi, violationTypesApi, studentsApi, departmentsApi } from '@/lib/api';
 import {
   X, Search, AlertTriangle, Briefcase,
-  ChevronDown, CheckCircle, Loader2,
+  ChevronDown, CheckCircle, Loader2, MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { ViolationType, Student } from '@/types';
+import type { ViolationType, Student, Department } from '@/types';
 
 interface Props {
   onClose: () => void;
@@ -23,23 +23,22 @@ const SEVERITY_COLOR: Record<string, string> = {
 };
 
 export default function RecordViolationModal({ onClose, onSuccess, studentId, studentName }: Props) {
-  // ── Student search (only if no studentId preset) ──────────────────
   const [studentSearch, setStudentSearch]     = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showDropdown, setShowDropdown]       = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // ── Form state ────────────────────────────────────────────────────
   const [violationTypeId, setViolationTypeId] = useState<number | ''>('');
   const [dateRecorded, setDateRecorded]       = useState(new Date().toISOString().split('T')[0]);
   const [officerNotes, setOfficerNotes]       = useState('');
   const [addDeploy, setAddDeploy]             = useState(false);
-  const [department, setDepartment]           = useState('');
+
+  // Department state
+  const [departmentId, setDepartmentId]       = useState<number | ''>('');
   const [supervisorName, setSupervisorName]   = useState('');
   const [hoursRequired, setHoursRequired]     = useState<number | ''>('');
   const [dateAssigned, setDateAssigned]       = useState(new Date().toISOString().split('T')[0]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -50,24 +49,28 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // ── Data queries ──────────────────────────────────────────────────
   const { data: typesData } = useQuery({
     queryKey: ['violation_types'],
     queryFn: () => violationTypesApi.list().then(r => r.data.data as ViolationType[]),
   });
   const violationTypes = typesData ?? [];
 
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => departmentsApi.list().then(r => r.data.data as Department[]),
+  });
+  const departments = departmentsData ?? [];
+
   const { data: searchData, isFetching: searching } = useQuery({
     queryKey: ['student_search_modal', studentSearch],
-    queryFn: () =>
-      studentsApi.search(studentSearch, 1)
-        .then(r => r.data.data as Student[]),
+    queryFn: () => studentsApi.search(studentSearch, 1).then(r => r.data.data as Student[]),
     enabled: studentSearch.length >= 2 && !studentId,
   });
   const searchResults = searchData ?? [];
 
-  // Fill hours from violation type default
   const selectedType = violationTypes.find(t => t.id === violationTypeId);
+  const selectedDept = departments.find(d => d.id === departmentId);
+
   useEffect(() => {
     if (selectedType?.default_hours) {
       setHoursRequired(selectedType.default_hours);
@@ -75,7 +78,13 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
     }
   }, [selectedType]);
 
-  // ── Submit ────────────────────────────────────────────────────────
+  // Auto-fill supervisor name from dept head when department is selected
+  useEffect(() => {
+    if (selectedDept?.head_name) {
+      setSupervisorName(selectedDept.head_name);
+    }
+  }, [selectedDept]);
+
   const mutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => violationsApi.create(payload),
     onSuccess: () => {
@@ -95,6 +104,7 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
     e.preventDefault();
     if (!resolvedStudentId) { toast.error('Please select a student'); return; }
     if (!violationTypeId)   { toast.error('Please select a violation type'); return; }
+    if (addDeploy && !departmentId) { toast.error('Please select a department for community service'); return; }
 
     const payload: Record<string, unknown> = {
       student_id:        resolvedStudentId,
@@ -103,21 +113,24 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
       officer_notes:     officerNotes || null,
     };
 
-    if (addDeploy && department && hoursRequired) {
-      payload.deploy = { department, supervisor_name: supervisorName || null, hours_required: hoursRequired, date_assigned: dateAssigned };
+    if (addDeploy && departmentId && hoursRequired) {
+      payload.deploy = {
+        department_id:  departmentId,
+        supervisor_name: supervisorName || null,
+        hours_required:  hoursRequired,
+        date_assigned:   dateAssigned,
+      };
     }
 
     mutation.mutate(payload);
   };
 
-  // ── Resolved display name ─────────────────────────────────────────
   const displayName = studentName ?? (selectedStudent ? `${selectedStudent.last_name}, ${selectedStudent.first_name}` : null);
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      {/* max-h + flex-col so the panel never exceeds the viewport */}
       <div className="modal-panel max-w-lg w-full flex flex-col" style={{ maxHeight: 'calc(100dvh - 2rem)' }}>
-        {/* Header — always visible */}
+        {/* Header */}
         <div className="modal-header shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-sti-blue-pale flex items-center justify-center">
@@ -134,15 +147,12 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-          {/* Scrollable body */}
           <div className="modal-body space-y-4 overflow-y-auto flex-1">
 
-            {/* Student selector (only if no preset) */}
+            {/* Student selector */}
             {!studentId && (
               <div className="form-group" ref={searchRef}>
-                <label className="input-label">
-                  Student <span className="text-red-500">*</span>
-                </label>
+                <label className="input-label">Student <span className="text-red-500">*</span></label>
                 {selectedStudent ? (
                   <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-sti-blue bg-sti-blue-pale">
                     <div className="w-8 h-8 rounded-full bg-sti-blue flex items-center justify-center text-white font-bold text-sm shrink-0">
@@ -203,9 +213,7 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
 
             {/* Violation Type */}
             <div className="form-group">
-              <label className="input-label">
-                Violation Type <span className="text-red-500">*</span>
-              </label>
+              <label className="input-label">Violation Type <span className="text-red-500">*</span></label>
               <div className="relative">
                 <select
                   value={violationTypeId}
@@ -218,7 +226,7 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
                     const group = violationTypes.filter(t => t.severity === sev);
                     if (!group.length) return null;
                     return (
-                      <optgroup key={sev} label={`${sev.toUpperCase()} — ${sev === 'critical' ? 'Most Severe' : ''}`}>
+                      <optgroup key={sev} label={sev.toUpperCase()}>
                         {group.map(t => (
                           <option key={t.id} value={t.id}>{t.violation_name}</option>
                         ))}
@@ -265,7 +273,7 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
               />
             </div>
 
-            {/* Community Service Deployment */}
+            {/* Community Service */}
             <div className="rounded-xl border border-slate-200 overflow-hidden">
               <button
                 type="button"
@@ -286,17 +294,33 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
 
               {addDeploy && (
                 <div className="p-4 border-t border-slate-200 space-y-3 bg-white">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="form-group col-span-2">
-                      <label className="input-label">Department / Office</label>
-                      <input
-                        type="text"
-                        value={department}
-                        onChange={e => setDepartment(e.target.value)}
-                        placeholder="e.g. Library, NSTP Office, Registrar"
-                        className="w-full"
-                      />
+                  {/* Department dropdown */}
+                  <div className="form-group">
+                    <label className="input-label">Department <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <select
+                        value={departmentId}
+                        onChange={e => setDepartmentId(Number(e.target.value) || '')}
+                        className="w-full pr-8"
+                      >
+                        <option value="">Select department…</option>
+                        {departments.map(dept => (
+                          <option key={dept.id} value={dept.id}>
+                            [{dept.code}] {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     </div>
+                    {/* Location hint */}
+                    {selectedDept?.location && (
+                      <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                        <MapPin size={11} /> {selectedDept.location}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="form-group">
                       <label className="input-label">Supervisor Name</label>
                       <input
@@ -334,7 +358,7 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
             </div>
           </div>
 
-          {/* Footer — always visible */}
+          {/* Footer */}
           <div className="modal-footer shrink-0">
             <button type="button" onClick={onClose} className="btn-secondary text-sm px-4 py-2">
               Cancel

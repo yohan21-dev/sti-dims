@@ -22,12 +22,14 @@ const ROLE_BADGE: Record<UserRole, string> = {
   admin:   'bg-red-100 text-red-700',
   officer: 'bg-sti-blue/10 text-sti-blue',
   viewer:  'bg-slate-100 text-slate-600',
+  dept_head: 'bg-green-100 text-green-700',
 };
 
 const ROLE_ICON: Record<UserRole, React.ReactNode> = {
   admin:   <Shield size={12} />,
   officer: <UserCheck size={12} />,
   viewer:  <Eye size={12} />,
+  dept_head: <UserCheck size={12} />,
 };
 
 // ── Edit User Modal ───────────────────────────────────────────────────
