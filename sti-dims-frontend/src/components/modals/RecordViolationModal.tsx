@@ -1,4 +1,3 @@
-// src/components/modals/RecordViolationModal.tsx
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { violationsApi, violationTypesApi, studentsApi } from '@/lib/api';
@@ -116,9 +115,10 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-panel max-w-lg w-full">
-        {/* Header */}
-        <div className="modal-header">
+      {/* max-h + flex-col so the panel never exceeds the viewport */}
+      <div className="modal-panel max-w-lg w-full flex flex-col" style={{ maxHeight: 'calc(100dvh - 2rem)' }}>
+        {/* Header — always visible */}
+        <div className="modal-header shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-sti-blue-pale flex items-center justify-center">
               <AlertTriangle size={18} className="text-sti-blue" />
@@ -133,8 +133,9 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          {/* Scrollable body */}
+          <div className="modal-body space-y-4 overflow-y-auto flex-1">
 
             {/* Student selector (only if no preset) */}
             {!studentId && (
@@ -227,7 +228,6 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
                 </select>
                 <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
-              {/* Severity badge preview */}
               {selectedType && (
                 <div className="mt-2 flex items-center gap-2">
                   <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border uppercase ${SEVERITY_COLOR[selectedType.severity]}`}>
@@ -334,8 +334,8 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="modal-footer">
+          {/* Footer — always visible */}
+          <div className="modal-footer shrink-0">
             <button type="button" onClick={onClose} className="btn-secondary text-sm px-4 py-2">
               Cancel
             </button>

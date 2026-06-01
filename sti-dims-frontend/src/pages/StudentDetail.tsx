@@ -1,18 +1,18 @@
-// src/pages/StudentDetail.tsx
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { studentsApi, violationsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft, AlertTriangle, FileText, Briefcase,
-  Plus, Clock, CheckCircle, XCircle, Upload, Download, Pencil,
+  Plus, Clock, CheckCircle, XCircle, Upload, Download, Pencil, Trash2,
 } from 'lucide-react';
 import type { Student, Violation } from '@/types';
 import { format } from 'date-fns';
 import RecordViolationModal from '@/components/modals/RecordViolationModal';
 import UploadFileModal from '@/components/modals/UploadFileModal';
 import EditViolationModal from '@/components/modals/EditViolationModal';
-
+import DeleteViolationModal from '@/components/modals/DeleteViolationModal';
 
 const SEVERITY_BADGE: Record<string, string> = {
   minor: 'badge-minor', moderate: 'badge-moderate',
@@ -37,9 +37,14 @@ function formatBytes(bytes: number) {
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [showViolModal,   setShowViolModal]   = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const { user } = useAuth();
+  const [showViolModal,    setShowViolModal]    = useState(false);
+  const [showUploadModal,  setShowUploadModal]  = useState(false);
   const [editingViolation, setEditingViolation] = useState<Violation | null>(null);
+  const [deletingViolation,setDeletingViolation]= useState<(Violation & { student_name?: string }) | null>(null);
+
+  const canDelete = user?.role === 'admin' || user?.role === 'officer';
+
   const { data: student, isLoading: loadingStudent } = useQuery({
     queryKey: ['student', id],
     queryFn: () => studentsApi.get(Number(id)).then(r => r.data.data as Student),
@@ -61,6 +66,7 @@ export default function StudentDetailPage() {
   }
 
   const vList = violations ?? [];
+  const studentDisplayName = student ? `${student.last_name}, ${student.first_name}` : undefined;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -144,14 +150,24 @@ export default function StudentDetailPage() {
                       <span className={`badge ${STATUS_BADGE[v.status] ?? ''} flex items-center gap-1`}>
                         {STATUS_ICON[v.status]}{v.status.replace('_', ' ')}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingViolation(v)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                        title="Edit violation"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      {canDelete && (
                         <button
                           type="button"
-                          onClick={() => setEditingViolation(v)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                          title="Edit violation"
+                          onClick={() => setDeletingViolation({ ...v, student_name: studentDisplayName })}
+                          className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Delete violation"
                         >
-                          <Pencil size={14} />
+                          <Trash2 size={14} />
                         </button>
+                      )}
                     </div>
                   </div>
 
@@ -237,10 +253,14 @@ export default function StudentDetailPage() {
         <EditViolationModal
           violation={editingViolation}
           onClose={() => setEditingViolation(null)}
-          onSuccess={() => {
-            setEditingViolation(null);
-            refetchViol();
-          }}
+          onSuccess={() => { setEditingViolation(null); refetchViol(); }}
+        />
+      )}
+      {deletingViolation && (
+        <DeleteViolationModal
+          violation={deletingViolation}
+          onClose={() => setDeletingViolation(null)}
+          onSuccess={() => { setDeletingViolation(null); refetchViol(); }}
         />
       )}
     </div>

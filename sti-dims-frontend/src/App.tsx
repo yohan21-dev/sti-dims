@@ -12,6 +12,7 @@ import AdminLayout          from '@/pages/admin/Admin';
 import AdminViolationTypes  from '@/pages/admin/AdminViolationTypes';
 import AdminUsers           from '@/pages/admin/AdminUsers';
 import AdminAuditLog        from '@/pages/admin/AdminAuditLog';
+import AdminBackup          from '@/pages/admin/AdminBackup';
 import RegisterPage         from '@/pages/Register';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -52,7 +53,7 @@ function AppRoutes() {
       </Route>
 
       <Route path="/register" element={<RegisterPage />} />
- 
+
       <Route
         path="/admin"
         element={
@@ -66,6 +67,7 @@ function AppRoutes() {
           <Route path="violation-types" element={<AdminViolationTypes />} />
           <Route path="users"           element={<AdminUsers />} />
           <Route path="audit-log"       element={<AdminAuditLog />} />
+          <Route path="backup"          element={<AdminBackup />} />
         </Route>
       </Route>
 

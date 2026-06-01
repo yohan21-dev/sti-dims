@@ -1,11 +1,13 @@
+// src/pages/admin/Admin.tsx
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Shield, Users, AlertTriangle, ScrollText, Settings } from 'lucide-react';
+import { Shield, Users, AlertTriangle, ScrollText, Settings, Download } from 'lucide-react';
 
 const TABS = [
   { to: '/admin/violation-types', icon: AlertTriangle,  label: 'Violation Types' },
   { to: '/admin/users',           icon: Users,           label: 'User Management' },
   { to: '/admin/audit-log',       icon: ScrollText,      label: 'Audit Log'       },
+  { to: '/admin/backup',          icon: Download,        label: 'Backup & Export' },
 ];
 
 export default function AdminLayout() {
@@ -39,7 +41,7 @@ export default function AdminLayout() {
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-card w-fit">
+      <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-card w-fit flex-wrap">
         {TABS.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}

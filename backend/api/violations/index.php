@@ -1,5 +1,4 @@
 <?php
-// backend/api/violations/index.php
 require_once __DIR__ . '/../../middleware/AuthMiddleware.php';
 $authUser = requireAuth();
 
@@ -47,13 +46,11 @@ if ($method === 'GET') {
         $v = $stmt->fetch();
         if (!$v) fail('Violation not found', 404);
 
-        // Student name
         $sStmt = Database::cubao()->prepare("SELECT last_name, first_name FROM students WHERE id = ?");
         $sStmt->execute([$v['student_id']]);
         $s = $sStmt->fetch();
         $v['student_name'] = $s ? $s['last_name'] . ', ' . $s['first_name'] : 'Unknown Student';
 
-        // Files attached to this violation
         $fStmt = $pdo->prepare("SELECT * FROM student_files WHERE violation_id = ?");
         $fStmt->execute([$v['id']]);
         $v['files'] = $fStmt->fetchAll();
@@ -150,7 +147,6 @@ if ($method === 'POST') {
         if (empty($d[$f])) fail("$f is required");
     }
 
-    // Auto-calculate offense count for this student
     $ocStmt = $pdo->prepare("SELECT COUNT(*) FROM violations WHERE student_id = ?");
     $ocStmt->execute([(int)$d['student_id']]);
     $offenseCount = (int)$ocStmt->fetchColumn() + 1;
@@ -170,7 +166,6 @@ if ($method === 'POST') {
     ]);
     $violationId = (int)$pdo->lastInsertId();
 
-    // Optionally auto-create a deployment
     if (!empty($d['deploy'])) {
         $dp = $d['deploy'];
         $pdo->prepare(
@@ -202,6 +197,8 @@ if ($method === 'PATCH') {
     $fields = []; $vals = [];
     if ($status)              { $fields[] = 'status = ?';        $vals[] = $status; }
     if (isset($d['officer_notes'])) { $fields[] = 'officer_notes = ?'; $vals[] = $d['officer_notes']; }
+    if (isset($d['violation_type_id'])) { $fields[] = 'violation_type_id = ?'; $vals[] = (int)$d['violation_type_id']; }
+    if (isset($d['date_recorded'])) { $fields[] = 'date_recorded = ?'; $vals[] = $d['date_recorded']; }
     if (empty($fields))       fail('Nothing to update');
 
     $vals[] = $id;
@@ -210,12 +207,38 @@ if ($method === 'PATCH') {
     respond(['success' => true]);
 }
 
-// ── DELETE (admin only) ───────────────────────────────────────────────
+// ── DELETE — officers AND admins can delete ───────────────────────────
 if ($method === 'DELETE') {
-    requireRole($authUser, 'admin');
+    // Allow both admin and officer roles
+    if (!in_array($authUser['role'] ?? '', ['admin', 'officer'], true)) {
+        fail('Forbidden', 403);
+    }
+
     $id = (int)($_GET['id'] ?? 0);
     if (!$id) fail('id required');
+
+    // Verify violation exists
+    $check = $pdo->prepare("SELECT id, student_id FROM violations WHERE id = ?");
+    $check->execute([$id]);
+    $violation = $check->fetch();
+    if (!$violation) fail('Violation not found', 404);
+
+    // Officers can only delete violations they reported; admins can delete any
+    if ($authUser['role'] === 'officer') {
+        $ownerCheck = $pdo->prepare("SELECT reported_by FROM violations WHERE id = ?");
+        $ownerCheck->execute([$id]);
+        $row = $ownerCheck->fetch();
+        if (!$row || (int)$row['reported_by'] !== (int)$authUser['sub']) {
+            fail('You can only delete violations you recorded', 403);
+        }
+    }
+
+    // Delete related records first (cascade-safe)
+    $pdo->prepare("DELETE FROM service_logs WHERE deployment_id IN (SELECT id FROM deployments WHERE violation_id = ?)")->execute([$id]);
+    $pdo->prepare("DELETE FROM deployments WHERE violation_id = ?")->execute([$id]);
+    $pdo->prepare("UPDATE student_files SET violation_id = NULL WHERE violation_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM violations WHERE id = ?")->execute([$id]);
+
     auditLog($authUser['sub'], 'violation.delete', 'violations', $id);
     respond(['success' => true]);
 }

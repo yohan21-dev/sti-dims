@@ -2,12 +2,14 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { violationsApi } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Plus, Search, Filter, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Plus, Search, Filter, ChevronDown, Trash2 } from 'lucide-react';
 import type { Violation, ViolationStatus } from '@/types';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import RecordViolationModal from '@/components/modals/RecordViolationModal';
+import DeleteViolationModal from '@/components/modals/DeleteViolationModal';
 
 const STATUSES: ViolationStatus[] = ['pending', 'in_progress', 'resolved', 'appealed', 'dismissed'];
 
@@ -25,15 +27,18 @@ const STATUS_BADGE: Record<string, string> = {
   dismissed:   'bg-slate-100 text-slate-600',
 };
 
-// Extended type to include student_name from backend
 type ViolationWithName = Violation & { student_name?: string };
 
 export default function ViolationsPage() {
-  const [showModal,     setShowModal]     = useState(false);
-  const [filterStatus,  setFilterStatus]  = useState<string>('');
-  const [q,             setQ]             = useState('');
-  const [searchQuery,   setSearchQuery]   = useState('');
+  const { user } = useAuth();
+  const [showModal,      setShowModal]      = useState(false);
+  const [deletingViol,   setDeletingViol]   = useState<ViolationWithName | null>(null);
+  const [filterStatus,   setFilterStatus]   = useState<string>('');
+  const [q,              setQ]              = useState('');
+  const [searchQuery,    setSearchQuery]    = useState('');
   const qc = useQueryClient();
+
+  const canDelete = user?.role === 'admin' || user?.role === 'officer';
 
   const { data, isLoading } = useQuery({
     queryKey: ['violations', 'list', searchQuery, filterStatus],
@@ -56,7 +61,6 @@ export default function ViolationsPage() {
 
   const violations = data ?? [];
 
-  // Quick counts for the pill filters
   const counts = STATUSES.reduce((acc, s) => {
     acc[s] = violations.filter(v => v.status === s).length;
     return acc;
@@ -165,17 +169,14 @@ export default function ViolationsPage() {
                   <th>Severity</th>
                   <th>Status</th>
                   <th className="hidden lg:table-cell">Update Status</th>
+                  {canDelete && <th className="text-right pr-5">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {violations.map(v => (
                   <tr key={v.id}>
-                    {/* Student name — click to go to profile */}
                     <td>
-                      <Link
-                        to={`/students/${v.student_id}`}
-                        className="flex items-center gap-2.5 group"
-                      >
+                      <Link to={`/students/${v.student_id}`} className="flex items-center gap-2.5 group">
                         <div className="w-7 h-7 rounded-full bg-sti-blue-pale border border-sti-blue/20 flex items-center justify-center text-sti-blue font-bold text-xs shrink-0">
                           {(v.student_name ?? '?').charAt(0)}
                         </div>
@@ -188,7 +189,6 @@ export default function ViolationsPage() {
                       </Link>
                     </td>
 
-                    {/* Violation name */}
                     <td>
                       <div>
                         <p className="font-medium text-slate-800 text-sm">{v.violation_name}</p>
@@ -200,26 +200,22 @@ export default function ViolationsPage() {
                       </div>
                     </td>
 
-                    {/* Date */}
                     <td className="hidden md:table-cell text-slate-500 text-sm">
                       {format(new Date(v.date_recorded), 'MMM d, yyyy')}
                     </td>
 
-                    {/* Severity */}
                     <td>
                       <span className={`badge ${SEVERITY_BADGE[v.severity] ?? ''}`}>
                         {v.severity}
                       </span>
                     </td>
 
-                    {/* Status */}
                     <td>
                       <span className={`badge flex items-center gap-1 w-fit ${STATUS_BADGE[v.status] ?? ''}`}>
                         {v.status.replace('_', ' ')}
                       </span>
                     </td>
 
-                    {/* Inline update */}
                     <td className="hidden lg:table-cell">
                       <select
                         value={v.status}
@@ -233,6 +229,18 @@ export default function ViolationsPage() {
                         ))}
                       </select>
                     </td>
+
+                    {canDelete && (
+                      <td className="text-right pr-4">
+                        <button
+                          onClick={() => setDeletingViol(v)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors"
+                          title="Delete violation"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -240,7 +248,6 @@ export default function ViolationsPage() {
           </div>
         )}
 
-        {/* Summary footer */}
         {!isLoading && violations.length > 0 && (
           <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
             Showing {violations.length} violation{violations.length !== 1 ? 's' : ''}
@@ -249,7 +256,6 @@ export default function ViolationsPage() {
         )}
       </div>
 
-      {/* Record Violation Modal */}
       {showModal && (
         <RecordViolationModal
           onClose={() => setShowModal(false)}
@@ -257,6 +263,14 @@ export default function ViolationsPage() {
             setShowModal(false);
             qc.invalidateQueries({ queryKey: ['violations'] });
           }}
+        />
+      )}
+
+      {deletingViol && (
+        <DeleteViolationModal
+          violation={deletingViol}
+          onClose={() => setDeletingViol(null)}
+          onSuccess={() => setDeletingViol(null)}
         />
       )}
     </div>
