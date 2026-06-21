@@ -1,0 +1,15 @@
+{
+    "name": "sticubao/dims-backend",
+    "description": "STI DIMS backend",
+    "type": "project",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Rodolfo Ivan P. Maaño"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "phpmailer/phpmailer": "^7.1"
+    }
+}

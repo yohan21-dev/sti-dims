@@ -1,13 +1,12 @@
-// src/components/Sidebar.tsx
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Users, AlertTriangle,
-  Briefcase, LogOut, X, Settings
+  Briefcase, LogOut, X, Settings, Building2,
 } from 'lucide-react';
 
-const NAV = [
+const NAV_MAIN = [
   { to: '/',            icon: LayoutDashboard, label: 'Dashboard',   exact: true },
   { to: '/students',    icon: Users,           label: 'Students'               },
   { to: '/violations',  icon: AlertTriangle,   label: 'Violations'             },
@@ -19,6 +18,9 @@ interface Props { isOpen: boolean; onClose: () => void; }
 export default function Sidebar({ isOpen, onClose }: Props) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const isDeptHead = user?.role === 'dept_head';
+  const isAdmin    = user?.role === 'admin';
 
   const handleLogout = async () => {
     await logout();
@@ -35,10 +37,9 @@ export default function Sidebar({ isOpen, onClose }: Props) {
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}
     >
-      {/* ── Logo header ── */}
+      {/* ── Logo ── */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-sti-blue-dark/60">
         <div className="flex items-center gap-3">
-          {/* STI logo with yellow border accent */}
           <div className="relative">
             <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md overflow-hidden">
               <img src="/assets/images/sti-logo.png" alt="STI" className="w-10 h-auto object-contain" />
@@ -58,33 +59,74 @@ export default function Sidebar({ isOpen, onClose }: Props) {
         </button>
       </div>
 
-      {/* ── Nav links ── */}
+      {/* ── Nav ── */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV.map(({ to, icon: Icon, label, exact }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={exact}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
-               ${isActive
-                 ? 'bg-sti-yellow text-sti-blue shadow-sm'
-                 : 'text-white/70 hover:text-white hover:bg-white/10'}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon size={17} className={isActive ? 'text-sti-blue' : 'opacity-70'} />
-                <span>{label}</span>
-                {isActive && (
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sti-blue" />
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-        {user?.role === 'admin' && (
+
+        {isDeptHead ? (
+          <>
+            <NavLink
+              to="/dept-head"
+              end
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                 ${isActive ? 'bg-sti-yellow text-sti-blue shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/10'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Briefcase size={17} className={isActive ? 'text-sti-blue' : 'opacity-70'} />
+                  <span>Service Queue</span>
+                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sti-blue" />}
+                </>
+              )}
+            </NavLink>
+            <NavLink
+              to="/deployments"
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                 ${isActive ? 'bg-sti-yellow text-sti-blue shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/10'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <LayoutDashboard size={17} className={isActive ? 'text-sti-blue' : 'opacity-70'} />
+                  <span>All Deployments</span>
+                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sti-blue" />}
+                </>
+              )}
+            </NavLink>
+            <div className="mx-3 my-2 border-t border-white/10" />
+            <div className="px-3 py-2 flex items-center gap-2">
+              <Building2 size={14} className="text-sti-yellow" />
+              <span className="text-xs text-white/40 font-medium">Department Head</span>
+            </div>
+          </>
+        ) : (
+          NAV_MAIN.map(({ to, icon: Icon, label, exact }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={exact}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                 ${isActive ? 'bg-sti-yellow text-sti-blue shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/10'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon size={17} className={isActive ? 'text-sti-blue' : 'opacity-70'} />
+                  <span>{label}</span>
+                  {isActive && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-sti-blue" />}
+                </>
+              )}
+            </NavLink>
+          ))
+        )}
+
+        {isAdmin && (
           <>
             <div className="mx-3 my-2 border-t border-white/10" />
             <NavLink
@@ -92,9 +134,7 @@ export default function Sidebar({ isOpen, onClose }: Props) {
               onClick={onClose}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
-                ${isActive
-                  ? 'bg-sti-yellow text-sti-blue shadow-sm'
-                  : 'text-white/70 hover:text-white hover:bg-white/10'}`
+                 ${isActive ? 'bg-sti-yellow text-sti-blue shadow-sm' : 'text-white/70 hover:text-white hover:bg-white/10'}`
               }
             >
               {({ isActive }) => (
@@ -117,7 +157,7 @@ export default function Sidebar({ isOpen, onClose }: Props) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{user?.full_name}</p>
-            <p className="text-xs text-white/50 capitalize">{user?.role}</p>
+            <p className="text-xs text-white/50 capitalize">{user?.role?.replace('_', ' ')}</p>
           </div>
           <button
             onClick={handleLogout}

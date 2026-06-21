@@ -1,10 +1,11 @@
+// src/pages/admin/AdminUsers.tsx
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  Plus, Pencil, Trash2, X, Save, Loader2, Shield, Eye, UserCheck, UserX,
-  Copy, Link as LinkIcon, RefreshCw, Clock,
+  Plus, Pencil, Trash2, X, Save, Loader2, Shield, Eye,
+  UserCheck, UserX, Copy, Link as LinkIcon, RefreshCw, Clock, Building2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
@@ -16,20 +17,27 @@ type UserWithMeta = User & {
   last_login_at?: string;
 };
 
-const ROLES: UserRole[] = ['admin', 'officer', 'viewer'];
+const ROLES: UserRole[] = ['admin', 'officer', 'viewer', 'dept_head'];
 
 const ROLE_BADGE: Record<UserRole, string> = {
-  admin:   'bg-red-100 text-red-700',
-  officer: 'bg-sti-blue/10 text-sti-blue',
-  viewer:  'bg-slate-100 text-slate-600',
-  dept_head: 'bg-green-100 text-green-700',
+  admin:     'bg-red-100 text-red-700',
+  officer:   'bg-sti-blue/10 text-sti-blue',
+  viewer:    'bg-slate-100 text-slate-600',
+  dept_head: 'bg-purple-100 text-purple-700',
 };
 
 const ROLE_ICON: Record<UserRole, React.ReactNode> = {
-  admin:   <Shield size={12} />,
-  officer: <UserCheck size={12} />,
-  viewer:  <Eye size={12} />,
-  dept_head: <UserCheck size={12} />,
+  admin:     <Shield size={12} />,
+  officer:   <UserCheck size={12} />,
+  viewer:    <Eye size={12} />,
+  dept_head: <Building2 size={12} />,
+};
+
+const ROLE_LABEL: Record<UserRole, string> = {
+  admin:     'Admin',
+  officer:   'Officer',
+  viewer:    'Viewer',
+  dept_head: 'Dept Head',
 };
 
 // ── Edit User Modal ───────────────────────────────────────────────────
@@ -104,9 +112,14 @@ function EditUserModal({
                 disabled={isSelf}
                 className="w-full"
               >
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                {ROLES.map(r => (
+                  <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+                ))}
               </select>
               {isSelf && <p className="text-xs text-amber-600 mt-1">You cannot change your own role</p>}
+              {form.role === 'dept_head' && (
+                <p className="text-xs text-purple-600 mt-1">Assign a department to this user in the Departments tab.</p>
+              )}
             </div>
             <div className="form-group">
               <label className="input-label">Status</label>
@@ -156,9 +169,9 @@ function EditUserModal({
 
 // ── Invite Link Modal ─────────────────────────────────────────────────
 function InviteLinkModal({ onClose }: { onClose: () => void }) {
-  const [role, setRole]           = useState<UserRole>('officer');
-  const [expiresHrs, setExpires]  = useState(48);
-  const [link, setLink]           = useState('');
+  const [role, setRole]             = useState<UserRole>('officer');
+  const [expiresHrs, setExpires]    = useState(48);
+  const [link, setLink]             = useState('');
   const [generating, setGenerating] = useState(false);
 
   const generate = async () => {
@@ -202,7 +215,7 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
             <div className="form-group">
               <label className="input-label">Role for New User</label>
               <select value={role} onChange={e => setRole(e.target.value as UserRole)} className="w-full">
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -216,20 +229,22 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {role === 'dept_head' && (
+            <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-sm text-purple-700">
+              After this user registers, go to <strong>Admin → Departments</strong> to assign them as a department head.
+            </div>
+          )}
+
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
             <p className="font-semibold mb-0.5">Single-use link</p>
-            <p className="text-xs">This link can only be used once. When the user registers, they'll set their own username and password.</p>
+            <p className="text-xs">This link can only be used once. The user sets their own username and password on registration.</p>
           </div>
 
           {link && (
             <div className="space-y-2">
               <label className="input-label text-green-700">✓ Invite Link Generated</label>
               <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={link}
-                  className="flex-1 text-xs bg-green-50 border-green-200 text-green-800 font-mono"
-                />
+                <input readOnly value={link} className="flex-1 text-xs bg-green-50 border-green-200 text-green-800 font-mono" />
                 <button onClick={copy} className="btn-secondary flex items-center gap-1.5 text-sm px-3 shrink-0">
                   <Copy size={14} /> Copy
                 </button>
@@ -259,13 +274,12 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
 export default function AdminUsers() {
   const { user: me } = useAuth();
   const qc = useQueryClient();
-  const [editing, setEditing]     = useState<UserWithMeta | null>(null);
+  const [editing, setEditing]       = useState<UserWithMeta | null>(null);
   const [showInvite, setShowInvite] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users'],
-    queryFn: () =>
-      api.get('/admin/users/index.php').then(r => r.data.data as UserWithMeta[]),
+    queryFn: () => api.get('/admin/users/index.php').then(r => r.data.data as UserWithMeta[]),
   });
 
   const toggleActive = useMutation({
@@ -286,31 +300,30 @@ export default function AdminUsers() {
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to delete'),
   });
 
-  const users = data ?? [];
-  const activeCount   = users.filter(u => u.is_active).length;
-  const inactiveCount = users.filter(u => !u.is_active).length;
+  const users        = data ?? [];
+  const activeCount  = users.filter(u => u.is_active).length;
+  const inactiveCount= users.filter(u => !u.is_active).length;
+  const deptHeadCount= users.filter(u => u.role === 'dept_head').length;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="font-display font-bold text-slate-800">User Management</h2>
-          <p className="text-sm text-slate-500">{activeCount} active · {inactiveCount} inactive</p>
+          <p className="text-sm text-slate-500">{activeCount} active · {inactiveCount} inactive · {deptHeadCount} dept heads</p>
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="btn-primary flex items-center gap-1.5 text-sm self-start sm:self-auto"
-        >
+        <button onClick={() => setShowInvite(true)} className="btn-primary flex items-center gap-1.5 text-sm self-start sm:self-auto">
           <Plus size={15} /> Invite User
         </button>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Users', value: users.length, color: 'text-sti-blue', bg: 'bg-sti-blue-pale border-blue-200' },
-          { label: 'Active',      value: activeCount,  color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
-          { label: 'Inactive',    value: inactiveCount, color: 'text-slate-500', bg: 'bg-slate-50 border-slate-200' },
+          { label: 'Total',      value: users.length,   color: 'text-sti-blue',    bg: 'bg-sti-blue-pale border-blue-200' },
+          { label: 'Active',     value: activeCount,    color: 'text-green-600',   bg: 'bg-green-50 border-green-200' },
+          { label: 'Inactive',   value: inactiveCount,  color: 'text-slate-500',   bg: 'bg-slate-50 border-slate-200' },
+          { label: 'Dept Heads', value: deptHeadCount,  color: 'text-purple-600',  bg: 'bg-purple-50 border-purple-200' },
         ].map(s => (
           <div key={s.label} className={`card text-center py-3 border ${s.bg}`}>
             <p className={`font-display text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -347,7 +360,9 @@ export default function AdminUsers() {
                       </div>
                       <div>
                         <p className="font-semibold text-slate-800 text-sm">{u.full_name}</p>
-                        <p className="text-xs text-slate-400">@{u.username} {u.id === me?.id && <span className="text-sti-blue font-semibold">· you</span>}</p>
+                        <p className="text-xs text-slate-400">
+                          @{u.username} {u.id === me?.id && <span className="text-sti-blue font-semibold">· you</span>}
+                        </p>
                       </div>
                     </div>
                   </td>
@@ -355,7 +370,7 @@ export default function AdminUsers() {
                   <td>
                     <span className={`badge flex items-center gap-1 w-fit ${ROLE_BADGE[u.role as UserRole]}`}>
                       {ROLE_ICON[u.role as UserRole]}
-                      {u.role}
+                      {ROLE_LABEL[u.role as UserRole] ?? u.role}
                     </span>
                   </td>
                   <td className="hidden lg:table-cell text-sm text-slate-500">
@@ -407,13 +422,7 @@ export default function AdminUsers() {
         )}
       </div>
 
-      {editing && (
-        <EditUserModal
-          user={editing}
-          onClose={() => setEditing(null)}
-          onSuccess={() => setEditing(null)}
-        />
-      )}
+      {editing   && <EditUserModal user={editing} onClose={() => setEditing(null)} onSuccess={() => setEditing(null)} />}
       {showInvite && <InviteLinkModal onClose={() => setShowInvite(false)} />}
     </div>
   );

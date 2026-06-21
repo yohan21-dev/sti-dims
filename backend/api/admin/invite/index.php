@@ -82,7 +82,7 @@ if ($method === 'POST') {
     requireRole($authUser, 'admin');
 
     $role        = $d['role'] ?? 'officer';
-    $allowedRoles = ['admin', 'officer', 'viewer'];
+    $allowedRoles = ['admin', 'officer', 'viewer', 'dept_head'];
     if (!in_array($role, $allowedRoles, true)) fail('Invalid role');
 
     $expiresHrs = max(1, min(168, (int)($d['expires_hours'] ?? 48)));

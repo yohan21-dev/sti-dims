@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 import '@/styles/php-login.css';
 
@@ -115,7 +116,7 @@ export default function LoginPage() {
           </form>
 
           <div className="help-link">
-            <a href="#">Having trouble logging in? Click here</a>
+            <Link to="/forgot-password">Forgot Password?</Link>
           </div>
 
           <div className="info-box">
