@@ -6,7 +6,7 @@ requireMethod('GET');
 $payload = requireAuth();
 
 $stmt = Database::dims()->prepare(
-    "SELECT id, username, email, full_name, role, avatar_url, last_login_at FROM users WHERE id = ?"
+    "SELECT id, username, email, full_name, role, avatar_url, last_login_at, department_id FROM users WHERE id = ?"
 );
 $stmt->execute([$payload['sub']]);
 $user = $stmt->fetch();

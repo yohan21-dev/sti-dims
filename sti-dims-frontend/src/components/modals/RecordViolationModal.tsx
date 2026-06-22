@@ -70,6 +70,10 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
 
   const selectedType = violationTypes.find(t => t.id === violationTypeId);
   const selectedDept = departments.find(d => d.id === departmentId);
+  const departmentHeadName = selectedDept?.head_names
+    ?.split(',')
+    .map(name => name.trim())
+    .find(Boolean) ?? selectedDept?.heads?.[0]?.full_name ?? '';
 
   useEffect(() => {
     if (selectedType?.default_hours) {
@@ -80,10 +84,10 @@ export default function RecordViolationModal({ onClose, onSuccess, studentId, st
 
   // Auto-fill supervisor name from dept head when department is selected
   useEffect(() => {
-    if (selectedDept?.head_name) {
-      setSupervisorName(selectedDept.head_name);
+    if (departmentHeadName) {
+      setSupervisorName(departmentHeadName);
     }
-  }, [selectedDept]);
+  }, [departmentHeadName]);
 
   const mutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => violationsApi.create(payload),

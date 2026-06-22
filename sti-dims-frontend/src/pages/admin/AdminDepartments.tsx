@@ -1,22 +1,20 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { departmentsApi, api } from '@/lib/api';
+import { departmentsApi } from '@/lib/api';
 import {
   Plus, Pencil, Trash2, X, Save, Loader2,
-  Building2, MapPin, User, ToggleLeft, ToggleRight,
+  Building2, MapPin, ToggleLeft, ToggleRight, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Department, User as UserType } from '@/types';
+import type { Department } from '@/types';
 
 // ── Modal ─────────────────────────────────────────────────────────────
 function DepartmentModal({
   initial,
-  users,
   onClose,
   onSuccess,
 }: {
   initial?: Department;
-  users: UserType[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -24,27 +22,20 @@ function DepartmentModal({
   const isEdit = !!initial;
 
   const [form, setForm] = useState({
-    name:         initial?.name         ?? '',
-    code:         initial?.code         ?? '',
-    description:  initial?.description  ?? '',
-    location:     initial?.location     ?? '',
-    head_user_id: initial?.head_user_id ?? '',
+    name:        initial?.name        ?? '',
+    code:        initial?.code        ?? '',
+    description: initial?.description ?? '',
+    location:    initial?.location    ?? '',
   });
 
-  const set = (k: keyof typeof form, v: string | number) =>
+  const set = (k: keyof typeof form, v: string) =>
     setForm(f => ({ ...f, [k]: v }));
 
   const mutation = useMutation({
     mutationFn: () =>
       isEdit
-        ? departmentsApi.update(initial!.id, {
-            ...form,
-            head_user_id: form.head_user_id || null,
-          })
-        : departmentsApi.create({
-            ...form,
-            head_user_id: form.head_user_id || null,
-          }),
+        ? departmentsApi.update(initial!.id, form)
+        : departmentsApi.create(form),
     onSuccess: () => {
       toast.success(isEdit ? 'Department updated' : 'Department created');
       qc.invalidateQueries({ queryKey: ['departments'] });
@@ -116,24 +107,14 @@ function DepartmentModal({
             />
           </div>
 
-          <div className="form-group">
-            <label className="input-label flex items-center gap-1.5">
-              <User size={13} className="text-slate-400" /> Department Head (optional)
-            </label>
-            <select
-              value={form.head_user_id}
-              onChange={e => set('head_user_id', e.target.value)}
-              className="w-full"
-            >
-              <option value="">— No head assigned —</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.full_name} (@{u.username}) · {u.role}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-400 mt-1">
-              Assigning a head will set their role to <strong>dept_head</strong> if they're currently an officer or viewer.
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-700">
+            <p className="font-semibold mb-0.5 flex items-center gap-1.5">
+              <Users size={13} /> Assigning Department Heads
+            </p>
+            <p className="text-xs text-blue-600">
+              To assign staff to this department, go to <strong>Admin → Users</strong>, edit the user,
+              set their role to <strong>Dept Head</strong>, and select this department.
+              Multiple users can be assigned to the same department.
             </p>
           </div>
         </div>
@@ -165,13 +146,6 @@ export default function AdminDepartments() {
     queryKey: ['departments', 'all'],
     queryFn: () => departmentsApi.list(true).then(r => r.data.data as Department[]),
   });
-
-  // Fetch users for the head dropdown (non-admin only to avoid assigning admin as dept_head)
-  const { data: usersData } = useQuery({
-    queryKey: ['admin-users'],
-    queryFn: () => api.get('/admin/users/index.php').then(r => r.data.data as UserType[]),
-  });
-  const eligibleUsers = (usersData ?? []).filter(u => u.role !== 'admin');
 
   const toggleActive = useMutation({
     mutationFn: ({ id, is_active }: { id: number; is_active: number }) =>
@@ -216,9 +190,10 @@ export default function AdminDepartments() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Total',    value: departments.length, color: 'text-sti-blue',   bg: 'bg-sti-blue-pale border-blue-200' },
-          { label: 'Active',   value: active.length,      color: 'text-green-600',  bg: 'bg-green-50 border-green-200' },
-          { label: 'With Head',value: departments.filter(d => d.head_user_id && d.is_active).length, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' },
+          { label: 'Total',       value: departments.length,                                    color: 'text-sti-blue',  bg: 'bg-sti-blue-pale border-blue-200' },
+          { label: 'Active',      value: active.length,                                         color: 'text-green-600', bg: 'bg-green-50 border-green-200'     },
+          { label: 'Staffed',     value: departments.filter(d => Number(d.head_count) > 0 && d.is_active).length,
+                                                                                                color: 'text-purple-600',bg: 'bg-purple-50 border-purple-200'   },
         ].map(s => (
           <div key={s.label} className={`card text-center py-3 border ${s.bg}`}>
             <p className={`font-display text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -240,7 +215,7 @@ export default function AdminDepartments() {
                 <th>Department</th>
                 <th className="hidden sm:table-cell">Code</th>
                 <th className="hidden md:table-cell">Location</th>
-                <th>Head</th>
+                <th>Heads</th>
                 <th>Status</th>
                 <th className="text-right pr-5">Actions</th>
               </tr>
@@ -279,14 +254,28 @@ export default function AdminDepartments() {
                       : <span className="text-slate-300">—</span>}
                   </td>
                   <td>
-                    {dept.head_name
-                      ? <span className="flex items-center gap-1.5 text-sm text-slate-700">
-                          <div className="w-6 h-6 rounded-full bg-sti-blue text-white text-xs flex items-center justify-center font-bold shrink-0">
-                            {dept.head_name.charAt(0)}
-                          </div>
-                          <span className="truncate max-w-[100px]">{dept.head_name}</span>
+                    {dept.head_names ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex -space-x-1.5">
+                          {dept.head_names.split(', ').slice(0, 3).map((name, i) => (
+                            <div
+                              key={i}
+                              title={name}
+                              className="w-6 h-6 rounded-full bg-sti-blue text-white text-xs flex items-center justify-center font-bold border-2 border-white shrink-0"
+                            >
+                              {name.charAt(0)}
+                            </div>
+                          ))}
+                        </div>
+                        <span className="text-xs text-slate-600 truncate max-w-[110px]">
+                          {Number(dept.head_count) === 1
+                            ? dept.head_names
+                            : `${dept.head_count} heads`}
                         </span>
-                      : <span className="text-slate-300 text-sm">—</span>}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 text-sm">—</span>
+                    )}
                   </td>
                   <td>
                     <button
@@ -314,7 +303,7 @@ export default function AdminDepartments() {
                       {dept.is_active && (
                         <button
                           onClick={() => {
-                            if (confirm(`Deactivate "${dept.name}"? It will be hidden from dropdowns.`)) {
+                            if (confirm(`Deactivate "${dept.name}"? It will be hidden from dropdowns and all assigned heads will be unlinked.`)) {
                               deleteMutation.mutate(dept.id);
                             }
                           }}
@@ -335,7 +324,6 @@ export default function AdminDepartments() {
 
       {showCreate && (
         <DepartmentModal
-          users={eligibleUsers}
           onClose={() => setShowCreate(false)}
           onSuccess={() => setShowCreate(false)}
         />
@@ -343,7 +331,6 @@ export default function AdminDepartments() {
       {editing && (
         <DepartmentModal
           initial={editing}
-          users={eligibleUsers}
           onClose={() => setEditing(null)}
           onSuccess={() => setEditing(null)}
         />

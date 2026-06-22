@@ -4,6 +4,7 @@ export type Severity = 'minor' | 'moderate' | 'major' | 'critical';
 export type DeployStatus = 'pending' | 'ongoing' | 'completed' | 'cancelled';
 export type FileCategory = 'incident_report' | 'written_statement' | 'photo_evidence' | 'parent_letter' | 'clearance' | 'id_photo' | 'other';
 
+
 export interface User {
   id: number;
   username: string;
@@ -12,6 +13,7 @@ export interface User {
   role: UserRole;
   avatar_url?: string;
   last_login_at?: string;
+  department_id?: number | null;
 }
 
 export interface Department {
@@ -20,8 +22,9 @@ export interface Department {
   code: string;
   description?: string;
   location?: string;
-  head_user_id?: number | null;
-  head_name?: string | null;
+  head_count?: number;
+  head_names?: string | null;  
+  heads?: Array<{ id: number; full_name: string; username: string }>;
   is_active: 0 | 1;
 }
 

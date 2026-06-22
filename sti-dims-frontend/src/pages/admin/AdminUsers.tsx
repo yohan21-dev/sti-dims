@@ -1,7 +1,7 @@
 // src/pages/admin/AdminUsers.tsx
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, departmentsApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Plus, Pencil, Trash2, X, Save, Loader2, Shield, Eye,
@@ -9,12 +9,14 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, parseISO } from 'date-fns';
-import type { User, UserRole } from '@/types';
+import type { User, UserRole, Department } from '@/types';
 
 type UserWithMeta = User & {
   is_active: 0 | 1;
   created_at: string;
   last_login_at?: string;
+  department_id?: number | null;
+  department_name?: string | null;
 };
 
 const ROLES: UserRole[] = ['admin', 'officer', 'viewer', 'dept_head'];
@@ -52,23 +54,39 @@ function EditUserModal({
 }) {
   const { user: me } = useAuth();
   const qc = useQueryClient();
+
   const [form, setForm] = useState({
-    full_name: target.full_name,
-    email:     target.email,
-    role:      target.role as UserRole,
-    is_active: target.is_active === 1,
+    full_name:     target.full_name,
+    email:         target.email,
+    role:          target.role as UserRole,
+    is_active:     target.is_active === 1,
+    department_id: target.department_id ?? '',
   });
   const [newPassword, setNewPassword] = useState('');
 
+  // Load departments only when role is dept_head
+  const { data: deptsData } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => departmentsApi.list().then(r => r.data.data as Department[]),
+    enabled: form.role === 'dept_head',
+  });
+  const departments = deptsData ?? [];
+
   const mutation = useMutation({
     mutationFn: () => api.patch(`/admin/users/index.php?id=${target.id}`, {
-      ...form,
-      is_active: form.is_active ? 1 : 0,
+      full_name:  form.full_name,
+      email:      form.email,
+      role:       form.role,
+      is_active:  form.is_active ? 1 : 0,
+      department_id: form.role === 'dept_head'
+        ? (form.department_id || null)
+        : null,
       ...(newPassword ? { password: newPassword } : {}),
     }),
     onSuccess: () => {
       toast.success('User updated');
       qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['departments'] });
       onSuccess();
     },
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to update user'),
@@ -97,18 +115,34 @@ function EditUserModal({
         <div className="modal-body space-y-4">
           <div className="form-group">
             <label className="input-label">Full Name</label>
-            <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} className="w-full" />
+            <input
+              value={form.full_name}
+              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+              className="w-full"
+            />
           </div>
+
           <div className="form-group">
             <label className="input-label">Email</label>
-            <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} className="w-full" />
+            <input
+              type="email"
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+              className="w-full"
+            />
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="form-group">
               <label className="input-label">Role</label>
               <select
                 value={form.role}
-                onChange={e => setForm(f => ({ ...f, role: e.target.value as UserRole }))}
+                onChange={e => setForm(f => ({
+                  ...f,
+                  role: e.target.value as UserRole,
+                  // Clear department when switching away from dept_head
+                  department_id: e.target.value === 'dept_head' ? f.department_id : '',
+                }))}
                 disabled={isSelf}
                 className="w-full"
               >
@@ -116,11 +150,11 @@ function EditUserModal({
                   <option key={r} value={r}>{ROLE_LABEL[r]}</option>
                 ))}
               </select>
-              {isSelf && <p className="text-xs text-amber-600 mt-1">You cannot change your own role</p>}
-              {form.role === 'dept_head' && (
-                <p className="text-xs text-purple-600 mt-1">Assign a department to this user in the Departments tab.</p>
+              {isSelf && (
+                <p className="text-xs text-amber-600 mt-1">You cannot change your own role</p>
               )}
             </div>
+
             <div className="form-group">
               <label className="input-label">Status</label>
               <div className="flex items-center gap-3 mt-2">
@@ -128,9 +162,13 @@ function EditUserModal({
                   type="button"
                   onClick={() => !isSelf && setForm(f => ({ ...f, is_active: !f.is_active }))}
                   disabled={isSelf}
-                  className={`w-12 h-6 rounded-full transition-colors flex items-center px-0.5 ${form.is_active ? 'bg-green-500' : 'bg-slate-300'} disabled:opacity-50`}
+                  className={`w-12 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                    form.is_active ? 'bg-green-500' : 'bg-slate-300'
+                  } disabled:opacity-50`}
                 >
-                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${form.is_active ? 'translate-x-6' : 'translate-x-0'}`} />
+                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    form.is_active ? 'translate-x-6' : 'translate-x-0'
+                  }`} />
                 </button>
                 <span className={`text-sm font-semibold ${form.is_active ? 'text-green-600' : 'text-slate-500'}`}>
                   {form.is_active ? 'Active' : 'Inactive'}
@@ -138,8 +176,36 @@ function EditUserModal({
               </div>
             </div>
           </div>
+
+          {/* Department assignment — only shown for dept_head role */}
+          {form.role === 'dept_head' && (
+            <div className="form-group">
+              <label className="input-label flex items-center gap-1.5">
+                <Building2 size={13} className="text-slate-400" /> Assigned Department
+              </label>
+              <select
+                value={form.department_id}
+                onChange={e => setForm(f => ({ ...f, department_id: e.target.value }))}
+                className="w-full"
+              >
+                <option value="">— No department —</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>
+                    [{d.code}] {d.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-400 mt-1">
+                Multiple dept heads can be assigned to the same department.
+              </p>
+            </div>
+          )}
+
           <div className="form-group">
-            <label className="input-label">New Password <span className="text-slate-400 font-normal">(leave blank to keep current)</span></label>
+            <label className="input-label">
+              New Password{' '}
+              <span className="text-slate-400 font-normal">(leave blank to keep current)</span>
+            </label>
             <input
               type="password"
               value={newPassword}
@@ -158,8 +224,9 @@ function EditUserModal({
             disabled={mutation.isPending}
             className="btn-primary text-sm px-5 py-2 flex items-center gap-2"
           >
-            {mutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            Save Changes
+            {mutation.isPending
+              ? <><Loader2 size={15} className="animate-spin" /> Saving…</>
+              : <><Save size={15} /> Save Changes</>}
           </button>
         </div>
       </div>
@@ -231,20 +298,27 @@ function InviteLinkModal({ onClose }: { onClose: () => void }) {
 
           {role === 'dept_head' && (
             <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 text-sm text-purple-700">
-              After this user registers, go to <strong>Admin → Departments</strong> to assign them as a department head.
+              After this user registers, go to <strong>Admin → Users</strong>, edit them,
+              and assign their department. Multiple heads can share the same department.
             </div>
           )}
 
           <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
             <p className="font-semibold mb-0.5">Single-use link</p>
-            <p className="text-xs">This link can only be used once. The user sets their own username and password on registration.</p>
+            <p className="text-xs">
+              This link can only be used once. The user sets their own username and password on registration.
+            </p>
           </div>
 
           {link && (
             <div className="space-y-2">
               <label className="input-label text-green-700">✓ Invite Link Generated</label>
               <div className="flex gap-2">
-                <input readOnly value={link} className="flex-1 text-xs bg-green-50 border-green-200 text-green-800 font-mono" />
+                <input
+                  readOnly
+                  value={link}
+                  className="flex-1 text-xs bg-green-50 border-green-200 text-green-800 font-mono"
+                />
                 <button onClick={copy} className="btn-secondary flex items-center gap-1.5 text-sm px-3 shrink-0">
                   <Copy size={14} /> Copy
                 </button>
@@ -300,19 +374,24 @@ export default function AdminUsers() {
     onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to delete'),
   });
 
-  const users        = data ?? [];
-  const activeCount  = users.filter(u => u.is_active).length;
-  const inactiveCount= users.filter(u => !u.is_active).length;
-  const deptHeadCount= users.filter(u => u.role === 'dept_head').length;
+  const users         = data ?? [];
+  const activeCount   = users.filter(u => u.is_active).length;
+  const inactiveCount = users.filter(u => !u.is_active).length;
+  const deptHeadCount = users.filter(u => u.role === 'dept_head').length;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="font-display font-bold text-slate-800">User Management</h2>
-          <p className="text-sm text-slate-500">{activeCount} active · {inactiveCount} inactive · {deptHeadCount} dept heads</p>
+          <p className="text-sm text-slate-500">
+            {activeCount} active · {inactiveCount} inactive · {deptHeadCount} dept heads
+          </p>
         </div>
-        <button onClick={() => setShowInvite(true)} className="btn-primary flex items-center gap-1.5 text-sm self-start sm:self-auto">
+        <button
+          onClick={() => setShowInvite(true)}
+          className="btn-primary flex items-center gap-1.5 text-sm self-start sm:self-auto"
+        >
           <Plus size={15} /> Invite User
         </button>
       </div>
@@ -320,10 +399,10 @@ export default function AdminUsers() {
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total',      value: users.length,   color: 'text-sti-blue',    bg: 'bg-sti-blue-pale border-blue-200' },
-          { label: 'Active',     value: activeCount,    color: 'text-green-600',   bg: 'bg-green-50 border-green-200' },
-          { label: 'Inactive',   value: inactiveCount,  color: 'text-slate-500',   bg: 'bg-slate-50 border-slate-200' },
-          { label: 'Dept Heads', value: deptHeadCount,  color: 'text-purple-600',  bg: 'bg-purple-50 border-purple-200' },
+          { label: 'Total',      value: users.length,   color: 'text-sti-blue',   bg: 'bg-sti-blue-pale border-blue-200' },
+          { label: 'Active',     value: activeCount,    color: 'text-green-600',  bg: 'bg-green-50 border-green-200'     },
+          { label: 'Inactive',   value: inactiveCount,  color: 'text-slate-500',  bg: 'bg-slate-50 border-slate-200'     },
+          { label: 'Dept Heads', value: deptHeadCount,  color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200'   },
         ].map(s => (
           <div key={s.label} className={`card text-center py-3 border ${s.bg}`}>
             <p className={`font-display text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -345,6 +424,7 @@ export default function AdminUsers() {
                 <th>User</th>
                 <th className="hidden md:table-cell">Email</th>
                 <th>Role</th>
+                <th className="hidden lg:table-cell">Department</th>
                 <th className="hidden lg:table-cell">Last Login</th>
                 <th>Status</th>
                 <th className="text-right pr-5">Actions</th>
@@ -355,29 +435,49 @@ export default function AdminUsers() {
                 <tr key={u.id} className={!u.is_active ? 'opacity-60' : ''}>
                   <td>
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 ${u.is_active ? 'bg-sti-blue' : 'bg-slate-400'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 ${
+                        u.is_active ? 'bg-sti-blue' : 'bg-slate-400'
+                      }`}>
                         {u.full_name.charAt(0)}
                       </div>
                       <div>
                         <p className="font-semibold text-slate-800 text-sm">{u.full_name}</p>
                         <p className="text-xs text-slate-400">
-                          @{u.username} {u.id === me?.id && <span className="text-sti-blue font-semibold">· you</span>}
+                          @{u.username}{u.id === me?.id && <span className="text-sti-blue font-semibold"> · you</span>}
                         </p>
                       </div>
                     </div>
                   </td>
+
                   <td className="hidden md:table-cell text-sm text-slate-500">{u.email}</td>
+
                   <td>
                     <span className={`badge flex items-center gap-1 w-fit ${ROLE_BADGE[u.role as UserRole]}`}>
                       {ROLE_ICON[u.role as UserRole]}
                       {ROLE_LABEL[u.role as UserRole] ?? u.role}
                     </span>
                   </td>
+
+                  <td className="hidden lg:table-cell text-sm text-slate-500">
+                    {u.role === 'dept_head'
+                      ? u.department_name
+                        ? <span className="flex items-center gap-1">
+                            <Building2 size={11} className="text-purple-400" />
+                            {u.department_name}
+                          </span>
+                        : <span className="text-amber-500 text-xs font-medium">⚠ Unassigned</span>
+                      : <span className="text-slate-300">—</span>}
+                  </td>
+
                   <td className="hidden lg:table-cell text-sm text-slate-500">
                     {u.last_login_at
-                      ? <span className="flex items-center gap-1"><Clock size={11} />{format(parseISO(u.last_login_at), 'MMM d, yyyy')}</span>
+                      ? <span className="flex items-center gap-1">
+                          <Clock size={11} />
+                          {format(parseISO(u.last_login_at), 'MMM d, yyyy')}
+                        </span>
                       : <span className="text-slate-300">Never</span>}
                   </td>
+
                   <td>
                     <button
                       onClick={() => u.id !== me?.id && toggleActive.mutate({ id: u.id, is_active: u.is_active ? 0 : 1 })}
@@ -388,9 +488,12 @@ export default function AdminUsers() {
                           : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                       } disabled:opacity-40 disabled:cursor-not-allowed`}
                     >
-                      {u.is_active ? <><UserCheck size={12} /> Active</> : <><UserX size={12} /> Inactive</>}
+                      {u.is_active
+                        ? <><UserCheck size={12} /> Active</>
+                        : <><UserX size={12} /> Inactive</>}
                     </button>
                   </td>
+
                   <td className="text-right pr-4">
                     <div className="flex items-center justify-end gap-1">
                       <button
@@ -422,7 +525,7 @@ export default function AdminUsers() {
         )}
       </div>
 
-      {editing   && <EditUserModal user={editing} onClose={() => setEditing(null)} onSuccess={() => setEditing(null)} />}
+      {editing    && <EditUserModal user={editing} onClose={() => setEditing(null)} onSuccess={() => setEditing(null)} />}
       {showInvite && <InviteLinkModal onClose={() => setShowInvite(false)} />}
     </div>
   );

@@ -263,7 +263,11 @@ fail('Method not allowed', 405);
 // ── Utility ───────────────────────────────────────────────────────────
 function getDeptHeadDepartment(PDO $pdo, int $userId): ?array {
     $stmt = $pdo->prepare(
-        "SELECT id, name, code, location FROM departments WHERE head_user_id = ? AND is_active = 1 LIMIT 1"
+        "SELECT d.id, d.name, d.code, d.location
+         FROM departments d
+         JOIN users u ON u.department_id = d.id
+         WHERE u.id = ? AND d.is_active = 1
+         LIMIT 1"
     );
     $stmt->execute([$userId]);
     return $stmt->fetch() ?: null;

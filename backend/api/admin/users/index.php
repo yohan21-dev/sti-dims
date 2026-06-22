@@ -34,7 +34,7 @@ if ($method === 'PATCH') {
     }
 
     $d = body();
-    $allowed = ['full_name', 'email', 'role', 'is_active', 'avatar_url'];
+    $allowed = ['full_name', 'email', 'role', 'is_active', 'avatar_url', 'department_id'];
     $fields = []; $vals = [];
 
     foreach ($allowed as $f) {
