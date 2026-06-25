@@ -39,7 +39,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
   admin:     'Admin',
   officer:   'Officer',
   viewer:    'Viewer',
-  dept_head: 'Dept Head',
+  dept_head: 'Department Personnel',
 };
 
 // ── Edit User Modal ───────────────────────────────────────────────────

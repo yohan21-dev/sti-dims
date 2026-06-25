@@ -270,7 +270,7 @@ export default function AdminDepartments() {
                         <span className="text-xs text-slate-600 truncate max-w-[110px]">
                           {Number(dept.head_count) === 1
                             ? dept.head_names
-                            : `${dept.head_count} heads`}
+                            : `${dept.head_count} personnels`}
                         </span>
                       </div>
                     ) : (
