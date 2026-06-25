@@ -1,28 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { deploymentsApi } from '@/lib/api';
 import {
   Clock, CheckCircle, TimerIcon,
   User, ChevronDown, ChevronUp, Plus,
   Loader2, CalendarDays, AlertTriangle, ClipboardCheck,
+  Play, Pause, RotateCcw, AlarmClock, PenLine,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import type { Deployment, DeployStatus } from '@/types';
 
-const STATUS_BADGE: Record<string, string> = {
-  pending:   'bg-yellow-100 text-yellow-700',
-  ongoing:   'bg-blue-100 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  cancelled: 'bg-slate-100 text-slate-600',
-};
-const STATUS_ICON: Record<string, React.ReactNode> = {
-  pending:   <Clock size={12} />,
-  ongoing:   <TimerIcon size={12} />,
-  completed: <CheckCircle size={12} />,
-};
+// TODO: Make this timer persistent when on session and when refreshed
+// TODO: Make this timer appear to the officers violations tab
 
-// ── Hours progress bar ────────────────────────────────────────────────
+// ─── Timer state (lifted so it survives card collapse) ────────────────
+interface TimerState {
+  /** wall-clock ms when the current run started (null = paused) */
+  startedAt: number | null;
+  /** total ms accumulated from previous runs */
+  accumulated: number;
+  /** whether the session has been started at all */
+  active: boolean;
+}
+
+const TIMER_INIT: TimerState = { startedAt: null, accumulated: 0, active: false };
+
+// ─── Utility ─────────────────────────────────────────────────────────
+function msToHMS(ms: number) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return { h, m, s, totalSec };
+}
+
+function pad(n: number) { return String(n).padStart(2, '0'); }
+
+function elapsedMs(ts: TimerState, now: number) {
+  return ts.accumulated + (ts.startedAt !== null ? now - ts.startedAt : 0);
+}
+
+// ─── Hours progress bar ───────────────────────────────────────────────
 function HoursBar({ done, total }: { done: number; total: number }) {
   const pct   = total > 0 ? Math.min(100, (done / total) * 100) : 0;
   const color = pct >= 100 ? 'bg-green-500' : pct >= 50 ? 'bg-sti-blue' : 'bg-amber-400';
@@ -39,111 +58,334 @@ function HoursBar({ done, total }: { done: number; total: number }) {
   );
 }
 
-// ── Log Hours inline panel ────────────────────────────────────────────
+// ─── Live clock display ───────────────────────────────────────────────
+function TimerDisplay({ ms, required }: { ms: number; required: number }) {
+  const { h, m, s } = msToHMS(ms);
+  const requiredMs = required * 3600_000;
+  const remainMs  = Math.max(0, requiredMs - ms);
+  const { h: rh, m: rm, s: rs } = msToHMS(remainMs);
+  const done = ms >= requiredMs && required > 0;
+
+  return (
+    <div className={`rounded-2xl p-4 text-center space-y-1 ${done ? 'bg-green-50 border border-green-200' : 'bg-sti-blue/5 border border-sti-blue/15'}`}>
+      {/* Elapsed */}
+      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Time Remaining</p>
+      <p className={`font-mono font-bold text-4xl leading-none tabular-nums tracking-tight ${done ? 'text-green-600' : 'text-sti-blue'}`}>
+        {pad(rh)}:{pad(rm)}:{pad(rs)}
+      </p>
+      {required > 0 && (
+        <p className={`text-xs font-semibold mt-1 ${done ? 'text-green-600' : 'text-slate-500'}`}>
+          {done
+            ? '✓ Hours requirement met!'
+            : pad(h)}:{pad(m)}:{pad(s)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Log Hours Panel (manual + timer tabs) ───────────────────────────
 function LogHoursPanel({
   deployment,
+  timer,
+  onTimerChange,
   onClose,
   onSuccess,
 }: {
   deployment: Deployment;
+  timer: TimerState;
+  onTimerChange: (ts: TimerState) => void;
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const [mode, setMode] = useState<'timer' | 'manual'>('timer');
+
+  // Manual fields
   const [logDate,  setLogDate]  = useState(new Date().toISOString().split('T')[0]);
   const [timeIn,   setTimeIn]   = useState('08:00');
   const [timeOut,  setTimeOut]  = useState('12:00');
   const [remarks,  setRemarks]  = useState('');
 
-  const hoursPreview = (() => {
+  // Live tick
+  const [now, setNow] = useState(Date.now());
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startTick = useCallback(() => {
+    if (tickRef.current) return;
+    tickRef.current = setInterval(() => setNow(Date.now()), 1000);
+  }, []);
+
+  const stopTick = useCallback(() => {
+    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+  }, []);
+
+  useEffect(() => {
+    if (timer.startedAt !== null) startTick();
+    return stopTick;
+  }, [timer.startedAt, startTick, stopTick]);
+
+  // Timer actions
+  const handleStart = () => {
+    onTimerChange({ ...timer, startedAt: Date.now(), active: true });
+    startTick();
+  };
+
+  const handlePause = () => {
+    const acc = elapsedMs(timer, Date.now());
+    onTimerChange({ startedAt: null, accumulated: acc, active: true });
+    stopTick();
+  };
+
+  const handleReset = () => {
+    stopTick();
+    onTimerChange(TIMER_INIT);
+  };
+
+  const elapsed = elapsedMs(timer, now);
+  const isRunning = timer.startedAt !== null;
+  const isPaused  = timer.active && !isRunning;
+
+  // Derive time strings from elapsed for submission
+  const timerStartWall = timer.active
+    ? new Date(Date.now() - elapsed).toTimeString().slice(0, 5)
+    : '08:00';
+  const timerNowStr   = new Date().toTimeString().slice(0, 5);
+
+  const manualHoursPreview = (() => {
     try {
       const [ih, im] = timeIn.split(':').map(Number);
       const [oh, om] = timeOut.split(':').map(Number);
       const diff = (oh * 60 + om) - (ih * 60 + im);
-      return diff > 0 ? (diff / 60).toFixed(1) : null;
+      return diff > 0 ? (diff / 60).toFixed(2) : null;
     } catch { return null; }
   })();
 
+  const timerHoursPreview = elapsed > 0
+    ? (elapsed / 3_600_000).toFixed(2)
+    : null;
+
   const mutation = useMutation({
-    mutationFn: () => deploymentsApi.logHours({
-      deployment_id: deployment.id,
-      log_date:      logDate,
-      time_in:       timeIn,
-      time_out:      timeOut,
-      verified:      true,  // dept_head always verifies
-      remarks:       remarks || null,
-    }),
+    mutationFn: (payload: {
+      deployment_id: number; log_date: string;
+      time_in: string; time_out: string;
+      verified: boolean; remarks: string | null;
+    }) => deploymentsApi.logHours(payload),
     onSuccess: () => {
       toast.success('Hours logged and verified');
+      handleReset();
       onSuccess();
     },
-    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to log hours'),
+    onError: (e: unknown) => {
+      const msg = (e as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error ?? 'Failed to log hours';
+      toast.error(msg);
+    },
   });
 
-  return (
-    <div className="mt-3 pt-3 border-t border-blue-100 bg-blue-50/40 rounded-xl p-3 space-y-3 animate-fade-in">
-      <p className="text-xs font-bold text-sti-blue uppercase tracking-wide flex items-center gap-1.5">
-        <ClipboardCheck size={13} /> Log Service Hours
-        <span className="ml-auto text-slate-400 font-normal normal-case">Hours are auto-verified</span>
-      </p>
+  const handleSubmit = () => {
+    if (mode === 'timer') {
+      if (!timerHoursPreview) { toast.error('No time recorded yet'); return; }
+      mutation.mutate({
+        deployment_id: deployment.id,
+        log_date:      new Date().toISOString().split('T')[0],
+        time_in:       timerStartWall,
+        time_out:      timerNowStr,
+        verified:      true,
+        remarks:       remarks || null,
+      });
+    } else {
+      if (!manualHoursPreview) { toast.error('Time out must be after time in'); return; }
+      mutation.mutate({
+        deployment_id: deployment.id,
+        log_date:      logDate,
+        time_in:       timeIn,
+        time_out:      timeOut,
+        verified:      true,
+        remarks:       remarks || null,
+      });
+    }
+  };
 
-      <div className="grid grid-cols-3 gap-2">
-        <div className="form-group">
-          <label className="input-label text-xs">Date</label>
-          <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
-            max={new Date().toISOString().split('T')[0]} className="w-full text-xs py-1.5" />
-        </div>
-        <div className="form-group">
-          <label className="input-label text-xs">Time In</label>
-          <input type="time" value={timeIn} onChange={e => setTimeIn(e.target.value)} className="w-full text-xs py-1.5" />
-        </div>
-        <div className="form-group">
-          <label className="input-label text-xs">Time Out</label>
-          <input type="time" value={timeOut} onChange={e => setTimeOut(e.target.value)} className="w-full text-xs py-1.5" />
-        </div>
+  return (
+    <div className="mt-3 pt-3 border-t border-blue-100 bg-blue-50/30 rounded-xl p-3 space-y-3 animate-fade-in">
+      {/* Mode tabs */}
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setMode('timer')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            mode === 'timer'
+              ? 'bg-sti-blue text-white shadow-btn'
+              : 'text-slate-500 hover:text-sti-blue'
+          }`}
+        >
+          <AlarmClock size={12} /> Live Timer
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('manual')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            mode === 'manual'
+              ? 'bg-sti-blue text-white shadow-btn'
+              : 'text-slate-500 hover:text-sti-blue'
+          }`}
+        >
+          <PenLine size={12} /> Manual Entry
+        </button>
       </div>
 
-      {hoursPreview && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sti-blue-pale text-sti-blue text-xs font-semibold">
-          <Clock size={12} /> {hoursPreview} hrs will be logged and verified
+      {/* ── Timer mode ── */}
+      {mode === 'timer' && (
+        <div className="space-y-3">
+          <TimerDisplay ms={elapsed} required={Number(deployment.hours_required)} />
+
+          {/* Control row */}
+          <div className="flex items-center gap-2 justify-center">
+            {!timer.active ? (
+              <button
+                type="button"
+                onClick={handleStart}
+                className="btn-primary flex items-center gap-2 px-5 py-2 text-sm"
+              >
+                <Play size={14} /> Start Timer
+              </button>
+            ) : isRunning ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePause}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition-colors"
+                >
+                  <Pause size={14} /> Pause
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Reset timer"
+                >
+                  <RotateCcw size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleStart}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-green-300 bg-green-50 text-green-700 text-sm font-semibold hover:bg-green-100 transition-colors"
+                >
+                  <Play size={14} /> Resume
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Reset timer"
+                >
+                  <RotateCcw size={15} />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Paused hint */}
+          {isPaused && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium">
+              <Pause size={11} className="shrink-0" />
+              Timer paused — resume when the student returns, or log what's recorded so far.
+            </div>
+          )}
+
+          {timerHoursPreview && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sti-blue-pale text-sti-blue text-xs font-semibold">
+              <Clock size={12} /> {timerHoursPreview} hrs will be logged
+            </div>
+          )}
         </div>
       )}
 
+      {/* ── Manual mode ── */}
+      {mode === 'manual' && (
+        <div className="space-y-3">
+          <div className="form-group">
+            <label className="input-label text-xs">Date</label>
+            <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
+              max={new Date().toISOString().split('T')[0]} className="w-full text-xs py-1.5" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="form-group">
+              <label className="input-label text-xs">Time In</label>
+              <input type="time" value={timeIn} onChange={e => setTimeIn(e.target.value)} className="w-full text-xs py-1.5" />
+            </div>
+            <div className="form-group">
+              <label className="input-label text-xs">Time Out</label>
+              <input type="time" value={timeOut} onChange={e => setTimeOut(e.target.value)} className="w-full text-xs py-1.5" />
+            </div>
+          </div>
+          {manualHoursPreview && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-sti-blue-pale text-sti-blue text-xs font-semibold">
+              <Clock size={12} /> {manualHoursPreview} hrs will be logged
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Remarks (shared) */}
       <div className="form-group">
         <label className="input-label text-xs">Remarks (optional)</label>
         <input type="text" value={remarks} onChange={e => setRemarks(e.target.value)}
           placeholder="e.g. Completed shelving task" className="w-full text-xs py-1.5" />
       </div>
 
-      <div className="flex gap-2">
+      {/* Footer actions */}
+      <div className="flex gap-2 pt-1">
         <button type="button" onClick={onClose} className="btn-secondary text-xs py-1.5 px-3">
-          Cancel
+          Close
         </button>
         <button
-          onClick={() => mutation.mutate()}
-          disabled={mutation.isPending || !hoursPreview}
-          className="btn-primary text-xs py-1.5 px-4 flex items-center gap-1.5"
+          type="button"
+          onClick={handleSubmit}
+          disabled={
+            mutation.isPending ||
+            (mode === 'timer' ? !timerHoursPreview : !manualHoursPreview)
+          }
+          className="btn-primary text-xs py-1.5 px-4 flex items-center gap-1.5 flex-1 justify-center"
         >
           {mutation.isPending
             ? <><Loader2 size={12} className="animate-spin" /> Saving…</>
-            : <><CheckCircle size={12} /> Confirm Hours</>}
+            : <><CheckCircle size={12} /> Log & Verify Hours</>}
         </button>
       </div>
+
+      <p className="text-xs text-slate-400 text-center flex items-center justify-center gap-1">
+        <ClipboardCheck size={11} /> Hours are auto-verified as department head
+      </p>
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────
 export default function DeptHeadDashboard() {
   const qc = useQueryClient();
   const [filterStatus, setFilterStatus] = useState<string>('');
-  const [expandedId, setExpandedId]     = useState<number | null>(null);
-  const [loggingId, setLoggingId]       = useState<number | null>(null);
+  const [expandedId,   setExpandedId]   = useState<number | null>(null);
+  const [loggingId,    setLoggingId]    = useState<number | null>(null);
+
+  // Timer states keyed by deployment id — survives card collapse
+  const [timerMap, setTimerMap] = useState<Record<number, TimerState>>({});
+
+  const getTimer = (id: number): TimerState => timerMap[id] ?? TIMER_INIT;
+  const setTimer = (id: number, ts: TimerState) =>
+    setTimerMap(prev => ({ ...prev, [id]: ts }));
 
   const { data, isLoading } = useQuery({
     queryKey: ['dept-head-deployments', filterStatus],
     queryFn: () =>
       deploymentsApi.list(filterStatus ? { status: filterStatus } : {})
-        .then(r => r.data as { data: Deployment[]; department: { id: number; name: string; code: string; location?: string } }),
+        .then(r => r.data as {
+          data: Deployment[];
+          department: { id: number; name: string; code: string; location?: string };
+        }),
   });
 
   const deployments = data?.data ?? [];
@@ -156,7 +398,11 @@ export default function DeptHeadDashboard() {
       toast.success('Status updated');
       qc.invalidateQueries({ queryKey: ['dept-head-deployments'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.error ?? 'Failed to update'),
+    onError: (e: unknown) => {
+      const msg = (e as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error ?? 'Failed to update';
+      toast.error(msg);
+    },
   });
 
   const STATUSES: DeployStatus[] = ['pending', 'ongoing', 'completed'];
@@ -165,6 +411,21 @@ export default function DeptHeadDashboard() {
     pending:   deployments.filter(d => d.status === 'pending').length,
     ongoing:   deployments.filter(d => d.status === 'ongoing').length,
     completed: deployments.filter(d => d.status === 'completed').length,
+  };
+
+  // Running timers count for the header badge
+  const runningCount = Object.values(timerMap).filter(t => t.startedAt !== null).length;
+
+  const STATUS_BADGE: Record<string, string> = {
+    pending:   'bg-yellow-100 text-yellow-700',
+    ongoing:   'bg-blue-100 text-blue-700',
+    completed: 'bg-green-100 text-green-700',
+    cancelled: 'bg-slate-100 text-slate-600',
+  };
+  const STATUS_ICON: Record<string, React.ReactNode> = {
+    pending:   <Clock size={12} />,
+    ongoing:   <TimerIcon size={12} />,
+    completed: <CheckCircle size={12} />,
   };
 
   return (
@@ -182,9 +443,17 @@ export default function DeptHeadDashboard() {
             <p className="section-sub text-amber-600">No department assigned to your account yet.</p>
           )}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          Your service queue
+        <div className="flex items-center gap-2 shrink-0">
+          {runningCount > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-green-700 font-semibold bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg animate-fade-in">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              {runningCount} timer{runningCount > 1 ? 's' : ''} running
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            Your service queue
+          </div>
         </div>
       </div>
 
@@ -245,8 +514,10 @@ export default function DeptHeadDashboard() {
         ) : deployments.map(d => {
           const isExpanded = expandedId === d.id;
           const isLogging  = loggingId  === d.id;
+          const timer      = getTimer(d.id);
           const overdue    = d.status !== 'completed' && d.status !== 'cancelled' &&
             d.date_assigned && differenceInDays(new Date(), parseISO(d.date_assigned)) > 60;
+          const timerRunning = timer.startedAt !== null;
 
           return (
             <div key={d.id} className={`card transition-all ${overdue ? 'border-red-200 bg-red-50/20' : ''}`}>
@@ -270,9 +541,17 @@ export default function DeptHeadDashboard() {
                         {d.student_program && <span className="text-xs text-slate-400">· {d.student_program}</span>}
                       </div>
                     </div>
-                    <span className={`badge flex items-center gap-1 shrink-0 ${STATUS_BADGE[d.status] ?? ''}`}>
-                      {STATUS_ICON[d.status]}{d.status}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Timer running indicator on collapsed card */}
+                      {timerRunning && (
+                        <span className="flex items-center gap-1 text-xs font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full animate-pulse">
+                          <Play size={9} fill="currentColor" /> Timing
+                        </span>
+                      )}
+                      <span className={`badge flex items-center gap-1 ${STATUS_BADGE[d.status] ?? ''}`}>
+                        {STATUS_ICON[d.status]}{d.status}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Violation info */}
@@ -315,13 +594,14 @@ export default function DeptHeadDashboard() {
                         <CheckCircle size={13} /> Accept Student
                       </button>
                     )}
-                    {d.status === 'ongoing' && (
+                    {d.status === 'ongoing' && !isLogging && (
                       <>
                         <button
-                          onClick={() => { setLoggingId(isLogging ? null : d.id); }}
+                          onClick={() => setLoggingId(d.id)}
                           className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
                         >
-                          <Plus size={13} /> Log Hours
+                          <Plus size={13} />
+                          {timer.active ? 'View Timer' : 'Log Hours'}
                         </button>
                         <button
                           onClick={() => ackMutation.mutate({ id: d.id, status: 'completed' })}
@@ -340,10 +620,12 @@ export default function DeptHeadDashboard() {
                     )}
                   </div>
 
-                  {/* Log hours form */}
+                  {/* Log hours panel */}
                   {isLogging && d.status === 'ongoing' && (
                     <LogHoursPanel
                       deployment={d}
+                      timer={timer}
+                      onTimerChange={ts => setTimer(d.id, ts)}
                       onClose={() => setLoggingId(null)}
                       onSuccess={() => {
                         setLoggingId(null);
